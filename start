@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+set -eu
+
+./.venv/bin/python3 app.py
+
