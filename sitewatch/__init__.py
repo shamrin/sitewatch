@@ -2,6 +2,7 @@ import os
 from typing import Optional
 from dataclasses import dataclass
 from datetime import timedelta, datetime
+import re
 import asyncio
 
 import httpx
@@ -12,7 +13,7 @@ class Page:
     id: int
     url: str
     period: timedelta
-    regex: str
+    regex: Optional[re.Pattern[str]]
 
 @dataclass
 class Report:
@@ -42,12 +43,12 @@ async def fetch_urls():
     await conn.executemany('''
         INSERT INTO page(pageid, url, period, regex) VALUES($1, $2, $3, $4)
         ON CONFLICT DO NOTHING
-    ''', [(1, 'https://httpbin.org/get', timedelta(minutes=5), 'httpx'),
+    ''', [(1, 'https://httpbin.org/get', timedelta(minutes=5), r'Agent.*httpx'),
           (2, 'https://google.com', timedelta(minutes=1), None),
           (3, 'https://google.com', timedelta(seconds=10), 'evil')])
 
     pages = [
-        Page(row['pageid'], row['url'], row['period'], row['regex'])
+        Page(row['pageid'], row['url'], row['period'], re.compile(row['regex']) if row['regex'] else None)
         for row in await conn.fetch('SELECT * FROM page')
     ]
 
@@ -78,21 +79,22 @@ async def save_report(r: Report):
     await conn.close()
 
 
-async def check(page):
+async def check(page: Page):
     sleep = page.period.total_seconds()
     async with httpx.AsyncClient() as client:
         while True:
             now = datetime.now()
             r = await client.get(page.url)
-            prefix = f'pageid:{page.id} url:{page.url} period:{page.period} regex:{page.regex!r}:'
-            if page.regex is not None:
-                print(prefix, 'OK' if page.regex in r.text else 'ERROR')
+            prefix = f'pageid:{page.id} url:{page.url} period:{page.period} regex:{page.regex.pattern if page.regex else None}:'
+            found = None if page.regex is None else bool(page.regex.search(r.text))
+            if found is not None:
+                print(prefix, 'OK' if found else 'ERROR')
             report = Report(
                 page = page,
                 sent = now,
                 elapsed = r.elapsed,
                 status_code = r.status_code,
-                found = None if page.regex is None else page.regex in r.text,
+                found = found,
             )
             await save_report(report)
             print(prefix, f'waiting {sleep}s...')
