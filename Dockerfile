@@ -15,7 +15,5 @@ COPY sitewatch/ $APP/sitewatch/
 COPY app.py $APP/
 COPY start $APP/
 
-# Allow statements and log messages to immediately appear in the Knative logs
 ENV PYTHONUNBUFFERED True
-#ENTRYPOINT [ "./start" ]
-CMD exec .venv/bin/gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 sitewatch.main:app
+ENTRYPOINT [ "./start" ]
