@@ -3,4 +3,4 @@
 set -eu
 
 docker build -t test .
-docker run --env PORT=8080 -p 8080:8080 -it test
+docker run -it test

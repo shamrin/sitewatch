@@ -14,12 +14,12 @@ poetry env use python3.9
 poetry install
 ```
 
-Start server:
+Start server directly:
 ```
 ./start
 ```
 
-Build and start server via Docker:
+Build and start Docker container:
 ```
 ./docker-start
 ```
