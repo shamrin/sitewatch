@@ -2,5 +2,5 @@
 
 set -eu
 
-./.venv/bin/python3 app.py
+.venv/bin/python app.py
 
