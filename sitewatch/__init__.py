@@ -8,6 +8,10 @@ import asyncio
 import httpx
 import asyncpg
 
+from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
+from aiokafka.helpers import create_ssl_context
+
+
 @dataclass
 class Page:
     id: int
@@ -24,8 +28,9 @@ class Report:
     found: Optional[bool] = None
 
 async def connect_db():
-    db = os.environ.get('DATABASE', '')
-    assert db.startswith('postgres://')
+    db = os.environ.get('DATABASE')
+    assert db, 'DATABASE env var is missing'
+    assert db.startswith('postgres://'), 'DATABASE env var is incorrect'
     return await asyncpg.connect(db)
 
 async def fetch_urls():
@@ -102,6 +107,68 @@ async def check(page: Page):
             print(prefix, f'waiting {sleep}s...')
             await asyncio.sleep(sleep)
 
+KAFKA_TOPIC = 'report-topic'
+
+def get_kafka_connection_params():
+    service_uri = os.environ.get('KAFKA_SERVICE_URI')
+    assert service_uri, 'KAFKA_SERVICE_URI env var is missing'
+    keys_dir = os.environ.get('KAFKA_KEYS_DIR')
+    assert keys_dir, 'KAFKA_KEYS_DIR env var is missing'
+
+
+    ssl_files = dict(
+        cafile=os.path.join(keys_dir, "ca-certificate"),
+        certfile=os.path.join(keys_dir, "access-certificate"),
+        keyfile=os.path.join(keys_dir, "access-key"),
+    )
+
+    print('kafka connection SSL files', ssl_files)
+
+    params = dict(
+        # See aiokafka documentation about SSL context:
+        # * https://aiokafka.readthedocs.io/en/stable/#getting-started
+        # * https://aiokafka.readthedocs.io/en/stable/examples/ssl_consume_produce.html
+        #
+        # Note: Python doesn't support loading SSL cert and key from memory.
+        # As of December 2020, it's not yet implemented (8 years and counting):
+        # https://bugs.python.org/issue16487, https://bugs.python.org/issue18369
+        ssl_context = create_ssl_context(**ssl_files),
+        bootstrap_servers = service_uri,
+        security_protocol = 'SSL'
+    )
+
+    return params
+
+async def send_one(loop):
+    producer = AIOKafkaProducer(loop=loop, **get_kafka_connection_params())
+    print('producer connecting to kafka cluster')
+    await producer.start()
+    print('producer connected')
+    try:
+        print('sending message')
+        record = await producer.send_and_wait(KAFKA_TOPIC, b"Super message")
+        print('message sent', record)
+    finally:
+        print('waiting for message delivery')
+        await producer.stop()
+        print('messages delivered (or expired)')
+
+
+async def consume(loop):
+    consumer = AIOKafkaConsumer(KAFKA_TOPIC, loop=loop, group_id="my-group", **get_kafka_connection_params())
+    print('consumer connecting to kafka cluster')
+    await consumer.start()
+    print('consumer connected')
+    try:
+        async for msg in consumer:
+            print("consumed: ", msg)
+    finally:
+        # Will leave consumer group; perform autocommit if enabled.
+        print("stopping consumer")
+        await consumer.stop()
+        print("consumer stopped")
+
+
 async def main():
     print('starting up')
 
@@ -110,7 +177,13 @@ async def main():
     for page in pages:
         asyncio.create_task(check(page))
 
-    # TODO: fix this
+    loop = asyncio.get_event_loop()
+    asyncio.create_task(consume(loop))
+    await asyncio.sleep(5)
+    for _ in range(5):
+        await send_one(loop)
+
+    # TODO remove this
     await asyncio.sleep(1000)
 
 def start():

@@ -1,5 +1,10 @@
 # sitewatch
 
+## Dependencies
+
+* Postgres
+* Kafka, with `report-topic` topic
+
 ## Start hacking
 
 Prerequisites:

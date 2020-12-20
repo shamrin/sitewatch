@@ -8,6 +8,7 @@ authors = ["Alexey Shamrin <shamrin@gmail.com>"]
 python = "^3.9"
 httpx = "^0.16.1"
 asyncpg = "^0.21.0"
+aiokafka = "^0.7.0"
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.8.4"
