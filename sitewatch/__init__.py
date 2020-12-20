@@ -35,17 +35,19 @@ async def fetch_urls():
         CREATE TABLE IF NOT EXISTS page(
             pageid serial PRIMARY KEY,
             url text NOT NULL,
-            period interval NOT NULL,
-            regex text
+            period interval DEFAULT interval '5 minute',
+            regex text,
+            UNIQUE (url, period, regex)
         )
     ''')
 
+    # Add page fixtures to have something interesting in the database
     await conn.executemany('''
-        INSERT INTO page(pageid, url, period, regex) VALUES($1, $2, $3, $4)
+        INSERT INTO page(url, period, regex) VALUES($1, $2, $3)
         ON CONFLICT DO NOTHING
-    ''', [(1, 'https://httpbin.org/get', timedelta(minutes=5), r'Agent.*httpx'),
-          (2, 'https://google.com', timedelta(minutes=1), None),
-          (3, 'https://google.com', timedelta(seconds=10), 'evil')])
+    ''', [('https://httpbin.org/get', timedelta(minutes=5), r'Agent.*httpx'),
+          ('https://google.com', timedelta(minutes=1), 'privacy'),
+          ('https://google.com', timedelta(seconds=10), 'evil')])
 
     pages = [
         Page(row['pageid'], row['url'], row['period'], re.compile(row['regex']) if row['regex'] else None)
@@ -62,7 +64,7 @@ async def save_report(r: Report):
     await conn.execute('''
         CREATE TABLE IF NOT EXISTS report(
             responseid serial PRIMARY KEY,
-            pageid integer NOT NULL REFERENCES page,
+            pageid integer NOT NULL REFERENCES page ON DELETE CASCADE,
             elapsed interval NOT NULL,
             statuscode int NOT NULL,
             sent timestamp NOT NULL,
