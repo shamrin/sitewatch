@@ -28,9 +28,8 @@ class Report:
     found: Optional[bool] = None
 
 async def connect_db():
-    db = os.environ.get('DATABASE')
-    assert db, 'DATABASE env var is missing'
-    assert db.startswith('postgres://'), 'DATABASE env var is incorrect'
+    db = os.environ.get('PG_SERVICE_URI')
+    assert db, 'PG_SERVICE_URI env var is missing'
     return await asyncpg.connect(db)
 
 async def fetch_urls():
@@ -51,8 +50,7 @@ async def fetch_urls():
         INSERT INTO page(url, period, regex) VALUES($1, $2, $3)
         ON CONFLICT DO NOTHING
     ''', [('https://httpbin.org/get', timedelta(minutes=5), r'Agent.*httpx'),
-          ('https://google.com', timedelta(minutes=1), 'privacy'),
-          ('https://google.com', timedelta(seconds=10), 'evil')])
+          ('https://google.com', timedelta(minutes=10), 'evil')])
 
     pages = [
         Page(row['pageid'], row['url'], row['period'], re.compile(row['regex']) if row['regex'] else None)
@@ -112,17 +110,8 @@ KAFKA_TOPIC = 'report-topic'
 def get_kafka_connection_params():
     service_uri = os.environ.get('KAFKA_SERVICE_URI')
     assert service_uri, 'KAFKA_SERVICE_URI env var is missing'
-    keys_dir = os.environ.get('KAFKA_KEYS_DIR')
-    assert keys_dir, 'KAFKA_KEYS_DIR env var is missing'
-
-
-    ssl_files = dict(
-        cafile=os.path.join(keys_dir, "ca-certificate"),
-        certfile=os.path.join(keys_dir, "access-certificate"),
-        keyfile=os.path.join(keys_dir, "access-key"),
-    )
-
-    print('kafka connection SSL files', ssl_files)
+    keys_dir = os.environ.get('KAFKA_CERT_DIR')
+    assert keys_dir, 'KAFKA_CERT_DIR env var is missing'
 
     params = dict(
         # See aiokafka documentation about SSL context:
@@ -132,20 +121,24 @@ def get_kafka_connection_params():
         # Note: Python doesn't support loading SSL cert and key from memory.
         # As of December 2020, it's not yet implemented (8 years and counting):
         # https://bugs.python.org/issue16487, https://bugs.python.org/issue18369
-        ssl_context = create_ssl_context(**ssl_files),
+        ssl_context = create_ssl_context(
+            cafile=os.path.join(keys_dir, "ca.pem"),
+            certfile=os.path.join(keys_dir, "service.cert"),
+            keyfile=os.path.join(keys_dir, "service.key"),
+        ),
         bootstrap_servers = service_uri,
-        security_protocol = 'SSL'
+        security_protocol = 'SSL',
     )
 
     return params
 
 async def send_one(loop):
     producer = AIOKafkaProducer(loop=loop, **get_kafka_connection_params())
-    print('producer connecting to kafka cluster')
+    # print('producer connecting to kafka cluster')
     await producer.start()
-    print('producer connected')
+    # print('producer connected')
     try:
-        print('sending message')
+        # print('sending message')
         record = await producer.send_and_wait(KAFKA_TOPIC, b"Super message")
         print('message sent', record)
     finally:

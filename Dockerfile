@@ -14,6 +14,7 @@ COPY --from=dependencies $APP/.venv $APP/.venv
 COPY sitewatch/ $APP/sitewatch/
 COPY app.py $APP/
 COPY start $APP/
+COPY save-aiven-creds $APP/
 
 ENV PYTHONUNBUFFERED True
 ENTRYPOINT [ "./start" ]

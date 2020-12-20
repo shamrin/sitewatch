@@ -2,13 +2,39 @@
 
 set -eu
 
-ENV_FILE=.env
-if [[ ! -e $ENV_FILE ]]; then
-  echo "$0: no $ENV_FILE file, run 'cp .env.template .env' and fill it in"
+AIVEN_CLIENT_JSON='{"project_name": "PROJECT"}'
+AIVEN_CREDENTIALS_JSON='{"auth_token": "TOKEN", "user_email": "EMAIL"}'
+
+if [[ -n "${AIVEN_TOKEN-}" ]]; then
+  mkdir -p ~/.config/aiven
+
+  echo ${AIVEN_CLIENT_JSON/PROJECT/$AIVEN_PROJECT} > ~/.config/aiven/aiven-client.json
+
+  AIVEN_CREDENTIALS_JSON=${AIVEN_CREDENTIALS_JSON/TOKEN/$AIVEN_TOKEN}
+  echo ${AIVEN_CREDENTIALS_JSON/EMAIL/$AIVEN_EMAIL}> ~/.config/aiven/aiven-credentials.json
+
+  ./save-aiven-creds $AIVEN_PG_SERVICE $AIVEN_KAFKA_SERVICE
+fi
+
+ENV_DIR=.env
+
+if [[ ! -d "$ENV_DIR" ]]; then
+  echo "$0: missing $ENV_DIR directory, run ./save-aiven-creds to populate it"
   exit 1
 fi
-# load environment variables from $ENV_FILE 
-export $(xargs < "$ENV_FILE")
+
+if [[ ! -e $ENV_DIR/KAFKA_SERVICE_URI ]]; then
+  echo "$0: missing $ENV_DIR/KAFKA_SERVICE_URI file"
+  exit 1
+fi
+
+if [[ ! -e $ENV_DIR/PG_SERVICE_URI ]]; then
+  echo "$0: missing $ENV_DIR/PG_SERVICE_URI file"
+  exit 1
+fi
+
+export PG_SERVICE_URI="$(cat $ENV_DIR/PG_SERVICE_URI)"
+export KAFKA_SERVICE_URI="$(cat $ENV_DIR/KAFKA_SERVICE_URI)"
+export KAFKA_CERT_DIR="$ENV_DIR"
 
 .venv/bin/python app.py
-

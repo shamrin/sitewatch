@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -eu
+
+if [ $# -ne 2 ]; then
+    echo "usage: $0 <pg_service_name> <kafka_service_name>"
+    echo "example: $0 pg-123456 kafka-123456"
+    echo "(and first log in to Aiven via 'avn user login')"
+    exit 1
+fi
+
+PG_SERVICE=$1
+KAFKA_SERVICE=$2
+
+echo "kafka: $KAFKA_SERVICE"
+echo "pg: $PG_SERVICE"
+
+PATH=$PATH:.venv/bin
+ENV_DIR=.env
+
+mkdir -p $ENV_DIR
+
+echo '.env/KAFKA_SERVICE_URI'
+avn service list $KAFKA_SERVICE --format "{service_uri}" > $ENV_DIR/KAFKA_SERVICE_URI
+echo '.env/PG_SERVICE_URI'
+avn service list $PG_SERVICE --format "{service_uri}" > $ENV_DIR/PG_SERVICE_URI
+echo '.env/{ca.pem,service.key,service.cert}'
+avn service user-creds-download --username avnadmin -d $ENV_DIR $KAFKA_SERVICE
+echo 'all ok'
