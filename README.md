@@ -64,15 +64,3 @@ Configure Google Cloud SDK:
 gcloud init
 gcloud config set run/region europe-north1
 ```
-
-Build container image:
-
-```
-gcloud builds submit --tag gcr.io/$(gcloud config get-value project)/sitewatch
-```
-
-Deploy container on Google Cloud Compute Engine. Replace with `project-1234`, `pg-123456` and `kafka-123456` with correct Aiven project and service names, and `user@example.com` with your email (registered at Aiven):
-
-```
-gcloud compute instances update-container sitewatch --container-image gcr.io/$(gcloud config get-value project)/sitewatch --container-env AIVEN_TOKEN=$(cat .env/AIVEN_TOKEN) --container-env AIVEN_EMAIL=user@example.com --container-env AIVEN_PROJECT=project-1234 --container-env AIVEN_PG_SERVICE=pg-123456 --container-env AIVEN_KAFKA_SERVICE=kafka-123456
-```
