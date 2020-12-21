@@ -32,4 +32,4 @@ jobs:
         poetry run flake8 sitewatch --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
-        poetry run python -m pytest
+        ./test

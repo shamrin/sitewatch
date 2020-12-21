@@ -31,6 +31,16 @@ Build and start Docker container:
 ./docker-start
 ```
 
+Run tests:
+```
+./test
+```
+
+To update the snapshots (in case of "snapshots failed" error):
+```
+./test.sh --snapshot-update
+```
+
 ## Deploy
 
 Create Kafka and Postgres services on [Aiven](aiven.io). Add `report-topic` topic in Kafka. Note project name and services' names. For example: `project-12345`, `pg-123456`, `kafka-123456`.

@@ -1,4 +1,3 @@
-import os
 import sys
 from typing import Optional
 from dataclasses import dataclass, asdict
@@ -20,6 +19,9 @@ class Page:
     period: timedelta
     regex: Optional[re.Pattern[str]]
 
+class ValidationError(Exception):
+    pass
+
 @dataclass
 class Report:
     pageid: int
@@ -36,11 +38,23 @@ class Report:
 
     @classmethod
     def frombytes(cls, raw: bytes) -> 'Report':
-        d = json.loads(str(raw, 'utf8'))
-        return Report(
+        try:
+            d = json.loads(str(raw, 'utf8'))
+        except json.JSONDecodeError:
+            raise ValidationError('invalid json')
+        try:
+            elapsed = timedelta(seconds=d['elapsed'])
+        except TypeError:
+            raise ValidationError('invalid duration')
+        try:
+            sent = datetime.fromisoformat(d['sent'])
+        except ValueError:
+            raise ValidationError('invalid datetime')
+
+        return cls(
             pageid=d['pageid'],
-            sent=datetime.fromisoformat(d['sent']),
-            elapsed=timedelta(seconds=d['elapsed']),
+            sent=sent,
+            elapsed=elapsed,
             status_code=d['status_code'],
             found=d['found'],
         )
