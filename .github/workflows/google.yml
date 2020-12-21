@@ -8,7 +8,6 @@
 
 name: sitewatch deploy
 
-name: Production deploy
 on:
   workflow_run:
     workflows: ["sitewatch test"]
