@@ -1,21 +1,45 @@
-"""Kafka producer and consumer, with service-specific settings"""
+"""Kafka producer and consumer, with service-specific settings and trio compat"""
 
 import os
 
+from trio_asyncio import aio_as_trio
 import aiokafka
-from aiokafka import AIOKafkaConsumer as KafkaConsumer
 from aiokafka.helpers import create_ssl_context
 
 KAFKA_TOPIC = 'report-topic'
 
 
-# Work-around until fix is merged: https://github.com/aio-libs/aiokafka/pull/701
 class KafkaProducer(aiokafka.AIOKafkaProducer):
-    """Same as aiokafka class, but works as a context manager"""
+    """Same as aiokafka class, but trio-compatible"""
 
+    # Also provides a work-around until this fix is merged:
+    # https://github.com/aio-libs/aiokafka/pull/701
+
+    @aio_as_trio
     async def __aenter__(self):
         await self.start()
         return self
+
+    @aio_as_trio
+    async def __aexit__(self):
+        await self.stop()
+
+    @aio_as_trio
+    async def send_and_wait(self, *arg, **kw):
+        return await super().send_and_wait(*arg, **kw)
+
+
+class KafkaConsumer(aiokafka.AIOKafkaConsumer):
+    """Same as aiokafka class, but trio-compatible"""
+
+    @aio_as_trio
+    async def __aenter__(self):
+        await self.start()
+        return aio_as_trio(self)
+
+    @aio_as_trio
+    async def __aexit__(self):
+        await self.stop()
 
 
 def kafka_params():

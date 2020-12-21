@@ -4,11 +4,13 @@ import sys
 from datetime import datetime
 import asyncio
 
+import trio
+import trio_asyncio
 import httpx
-import asyncpg
 
 from .kafka import KafkaProducer, KafkaConsumer, kafka_params, KAFKA_TOPIC
 from .db import (
+    create_pool,
     init_report_table,
     postgres_service,
     fetch_pages,
@@ -46,14 +48,14 @@ async def check_and_produce(producer: KafkaProducer, page: Page):
             record = await producer.send_and_wait(KAFKA_TOPIC, report.tobytes())
             print('message sent', record)
             print(log_prefix(page), f'waiting {sleep}s...')
-            await asyncio.sleep(sleep)
+            await trio.sleep(sleep)
 
 
 async def consume_and_save_reports():
     """Listen to Kafka and save reports to database"""
     loop = asyncio.get_event_loop()
 
-    async with asyncpg.create_pool(postgres_service()) as pool:
+    async with create_pool(postgres_service()) as pool:
         await init_report_table(pool)
         async with KafkaConsumer(
             KAFKA_TOPIC, loop=loop, group_id="my-group", **kafka_params()
@@ -73,7 +75,9 @@ async def main(mode):
         pages = await fetch_pages()
         async with KafkaProducer(loop=loop, **kafka_params()) as producer:
             print('connected to Kafka')
-            await asyncio.gather(*[check_and_produce(producer, page) for page in pages])
+            async with trio.open_nursery() as nursery:
+                for page in pages:
+                    nursery.start_soon(check_and_produce, producer, page)
     elif mode == 'report':
         await consume_and_save_reports()
     else:
@@ -81,4 +85,4 @@ async def main(mode):
 
 
 def start(mode):
-    asyncio.run(main(mode))
+    trio_asyncio.run(main, mode)
