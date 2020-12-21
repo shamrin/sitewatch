@@ -8,9 +8,12 @@
 
 name: sitewatch deploy
 
+name: Production deploy
 on:
-  push:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["sitewatch test"]
+    types:
+      - completed
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT }}
@@ -24,6 +27,8 @@ env:
 
 jobs:
   setup-build-publish-deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
     name: Setup, Build, Publish, and Deploy
     runs-on: ubuntu-latest
 
@@ -55,7 +60,7 @@ jobs:
         docker push "gcr.io/$PROJECT_ID/$IMAGE"
 
     - run: |-
-        gcloud compute instances create-with-container $IMAGE-watch \
+        gcloud compute instances update-container $IMAGE-watch \
           --zone $GCP_ZONE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
@@ -66,7 +71,7 @@ jobs:
           --container-arg watch
 
     - run: |-
-        gcloud compute instances create-with-container $IMAGE-report \
+        gcloud compute instances update-container $IMAGE-report \
           --zone $GCP_ZONE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \

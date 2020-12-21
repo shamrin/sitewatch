@@ -1,5 +1,14 @@
 # sitewatch
 
+`sitewatch` is an experiment to play with:
+
+- [Google Cloud](https://cloud.google.com/): 
+- [GitHub Actions](https://github.com/features/actions)
+- [Aiven](https://aiven.io)
+- [Trio](https://trio.readthedocs.io/) - Python library for async concurrency
+- [Kafka](https://kafka.apache.org/)
+- [Retool](https://retool.com/) - build internal tools
+
 ## Dependencies
 
 * Python 3.9
