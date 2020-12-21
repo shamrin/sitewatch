@@ -1,32 +1,33 @@
-"""Datatabase connection, tables init and main operations, with trio compat"""
+"""Datatabase connection, tables init and main operations"""
 
 import os
 from datetime import timedelta
 import re
 from typing import List
+from contextlib import asynccontextmanager
 
-import asyncpg
-from trio_asyncio import aio_as_trio
+import trio
+import triopg
 
 from .model import Report, Page
 
+PAGE_CHANNEL = 'page.change'
 
-def postgres_service() -> str:
+
+def pg_service() -> str:
     db = os.environ.get('PG_SERVICE_URI')
     assert db, 'PG_SERVICE_URI env var is missing'
     return db
 
 
-def create_pool(*args):
-    """Create database connection pool, trio-compatible"""
-    return aio_as_trio(asyncpg.create_pool(*args))
+def connect():
+    return triopg.connect(pg_service())
 
 
-@aio_as_trio
-async def init_page_table(pool):
+async def init_page_table(conn):
     """Initialize `page` table and add fixtures (idempotent)"""
 
-    await pool.execute(
+    await conn.execute(
         '''
         CREATE TABLE IF NOT EXISTS page(
             pageid serial PRIMARY KEY,
@@ -38,8 +39,36 @@ async def init_page_table(pool):
     '''
     )
 
+    # send NOTIFY on page table modifications
+    # based on https://tapoueh.org/blog/2018/07/postgresql-listen-notify/
+    await conn.execute(
+        f'''
+        BEGIN;
+        CREATE OR REPLACE FUNCTION notify_page_change ()
+        RETURNS TRIGGER
+        language plpgsql
+        as $$
+        declare
+        channel text := TG_ARGV[0];
+        BEGIN
+        PERFORM (
+            select pg_notify(channel, 'payload')
+        );
+        RETURN NULL;
+        END;
+        $$;
+        DROP TRIGGER IF EXISTS notify_page_change ON page;
+        CREATE TRIGGER notify_page_change
+                AFTER INSERT OR UPDATE OR DELETE
+                    ON page
+            FOR EACH ROW
+            EXECUTE PROCEDURE notify_page_change('{PAGE_CHANNEL}');
+        COMMIT;
+    '''
+    )
+
     # Add page fixtures to have something interesting in the database
-    await pool.executemany(
+    await conn.executemany(
         '''
         INSERT INTO page(url, period, regex) VALUES($1, $2, $3)
         ON CONFLICT DO NOTHING
@@ -51,14 +80,13 @@ async def init_page_table(pool):
     )
 
 
-@aio_as_trio
-async def init_report_table(pool):
+async def init_report_table(conn):
     """Initialize `report` table (idempotent)"""
 
-    await pool.execute(
+    await conn.execute(
         '''
         CREATE TABLE IF NOT EXISTS report(
-            responseid serial PRIMARY KEY,
+            reportid serial PRIMARY KEY,
             pageid integer NOT NULL REFERENCES page ON DELETE CASCADE,
             elapsed interval NOT NULL,
             statuscode int NOT NULL,
@@ -69,23 +97,35 @@ async def init_report_table(pool):
     )
 
 
-async def fetch_pages() -> List[Page]:
-    async with create_pool(postgres_service()) as pool:
-        await init_page_table(pool)
-        pages = [
-            Page(
-                row['pageid'],
-                row['url'],
-                row['period'],
-                re.compile(row['regex']) if row['regex'] else None,
-            )
-            for row in await aio_as_trio(pool.fetch)('SELECT * FROM page')
-        ]
+async def fetch_pages(conn) -> List[Page]:
+    await init_page_table(conn)
+    pages = [
+        Page(
+            row['pageid'],
+            row['url'],
+            row['period'],
+            re.compile(row['regex']) if row['regex'] else None,
+        )
+        for row in await conn.fetch('SELECT * FROM page')
+    ]
 
-        return pages
+    return pages
 
 
-@aio_as_trio
+# based on https://gitter.im/python-trio/general?at=5fe10d762084ee4b78650fc8
+@asynccontextmanager
+async def listen(conn, channel):
+    send_channel, receive_channel = trio.open_memory_channel(1)
+
+    def _listen_callback(c, pid, chan, payload):
+        send_channel.send_nowait(payload)
+
+    await conn.add_listener(channel, _listen_callback)
+    async with send_channel:
+        yield receive_channel
+    await conn.remove_listener(channel, _listen_callback)
+
+
 async def save_report(conn, r: Report):
     await conn.execute(
         '''

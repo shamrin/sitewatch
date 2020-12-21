@@ -9,13 +9,7 @@ import trio_asyncio
 import httpx
 
 from .kafka import KafkaProducer, KafkaConsumer, kafka_params, KAFKA_TOPIC
-from .db import (
-    create_pool,
-    init_report_table,
-    postgres_service,
-    fetch_pages,
-    save_report,
-)
+from . import db
 from .model import Report, Page
 
 
@@ -46,7 +40,7 @@ async def check_and_produce(producer: KafkaProducer, page: Page):
         while True:
             report = await check_page(client, page)
             record = await producer.send_and_wait(KAFKA_TOPIC, report.tobytes())
-            print('message sent', record)
+            print(f'pageid:{page.id} message sent offset:{record.offset}')
             print(log_prefix(page), f'waiting {sleep}s...')
             await trio.sleep(sleep)
 
@@ -55,8 +49,8 @@ async def consume_and_save_reports():
     """Listen to Kafka and save reports to database"""
     loop = asyncio.get_event_loop()
 
-    async with create_pool(postgres_service()) as pool:
-        await init_report_table(pool)
+    async with db.connect() as conn:
+        await db.init_report_table(conn)
         async with KafkaConsumer(
             KAFKA_TOPIC, loop=loop, group_id="my-group", **kafka_params()
         ) as consumer:
@@ -64,7 +58,17 @@ async def consume_and_save_reports():
             async for msg in consumer:
                 print("consumed: ", msg)
                 report = Report.frombytes(msg.value)
-                await save_report(pool, report)
+                await db.save_report(conn, report)
+
+
+async def listen_page(conn, cancel_scope):
+    """Listen for `page` table changes, restart if needed"""
+
+    async with db.listen(conn, db.PAGE_CHANNEL) as receive_channel:
+        print('pg: LISTEN page.change')
+        async for _ in receive_channel:
+            print('pg: received notification, restarting')
+            cancel_scope.cancel()
 
 
 async def main(mode):
@@ -72,14 +76,24 @@ async def main(mode):
     loop = asyncio.get_event_loop()
 
     if mode == 'watch':
-        pages = await fetch_pages()
-        async with KafkaProducer(loop=loop, **kafka_params()) as producer:
-            print('connected to Kafka')
-            async with trio.open_nursery() as nursery:
-                for page in pages:
-                    nursery.start_soon(check_and_produce, producer, page)
+        async with db.connect() as conn, KafkaProducer(
+            loop=loop, **kafka_params()
+        ) as producer:
+            print('connected to Kafka and Postgres')
+
+            # loop to allow restarting when listen_page cancels periodic checks
+            while True:
+                print('fetching pages')
+                pages = await db.fetch_pages(conn)
+                with trio.CancelScope() as cancel_scope:
+                    async with trio.open_nursery() as nursery:
+                        for page in pages:
+                            nursery.start_soon(check_and_produce, producer, page)
+                        await listen_page(conn, cancel_scope)
+
     elif mode == 'report':
         await consume_and_save_reports()
+
     else:
         sys.exit(f'error: unknown mode {mode}')
 

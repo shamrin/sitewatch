@@ -478,6 +478,19 @@ outcome = "*"
 async-generator = ">=1.6"
 
 [[package]]
+name = "triopg"
+version = "0.5.0"
+description = "PostgreSQL client for Trio based on asyncpg"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+trio-asyncio = ">=0.9.0"
+trio = ">=0.7.0"
+asyncpg = ">=0.15.0"
+
+[[package]]
 name = "typed-ast"
 version = "1.4.1"
 description = "a fork of Python 2 and 3 ast modules with type comment support"
@@ -517,7 +530,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "761d5c07a9dc541dda21023fa38f4502822af9be959e66bf8938e9776b8e9aea"
+content-hash = "d4e158b2d3a0d87beab36287652d7a9d8d70f3099c6aaefed8822d62e069f2f5"
 
 [metadata.files]
 aiokafka = [
@@ -814,6 +827,10 @@ trio = [
 trio-asyncio = [
     {file = "trio_asyncio-0.11.0-py3-none-any.whl", hash = "sha256:74249ab3d38aac50ada3de51425781bc93d2c27ce89179f110847d33c3e5f91b"},
     {file = "trio_asyncio-0.11.0.tar.gz", hash = "sha256:33113d6c9ba13c643de9d688f1f604b0a40e986754677373cb023ee2867e8c27"},
+]
+triopg = [
+    {file = "triopg-0.5.0-py3-none-any.whl", hash = "sha256:71096987b443281a16aff3f6750daafbfc64758598d0016116b65a363b41b78f"},
+    {file = "triopg-0.5.0.tar.gz", hash = "sha256:fe485c6f3aba703577397843b14cd91e389a5b13e9736d7449ee2bd41d0a960d"},
 ]
 typed-ast = [
     {file = "typed_ast-1.4.1-cp35-cp35m-manylinux1_i686.whl", hash = "sha256:73d785a950fc82dd2a25897d525d003f6378d1cb23ab305578394694202a58c3"},

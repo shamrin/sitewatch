@@ -5,10 +5,10 @@
 - [Google Cloud](https://cloud.google.com/): [Containers on Compute Engine](https://cloud.google.com/compute/docs/containers)
 - [GitHub Actions](https://github.com/features/actions)
 - [Aiven](https://aiven.io)
-- [Trio](https://trio.readthedocs.io/) - Python library for async concurrency
+- [Trio](https://trio.readthedocs.io/): Python library for async concurrency
 - [Kafka](https://kafka.apache.org/)
-- [Posgres](https://www.postgresql.org/)
-- [Retool](https://retool.com/) - build internal tools
+- [Posgres](https://www.postgresql.org/): LISTEN/NOTIFY
+- [Retool](https://retool.com/): quickly build admin UI
 
 ## Dependencies
 
