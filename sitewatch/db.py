@@ -1,5 +1,13 @@
+"""Datatabase connection, tables init and main operations"""
+
 import os
 from datetime import timedelta
+import re
+from typing import List
+
+import asyncpg
+
+from .model import Report, Page
 
 
 def postgres_service() -> str:
@@ -9,6 +17,8 @@ def postgres_service() -> str:
 
 
 async def init_page_table(pool):
+    """Initialize `page` table and add fixtures (idempotent)"""
+
     await pool.execute(
         '''
         CREATE TABLE IF NOT EXISTS page(
@@ -35,6 +45,8 @@ async def init_page_table(pool):
 
 
 async def init_report_table(pool):
+    """Initialize `report` table (idempotent)"""
+
     await pool.execute(
         '''
         CREATE TABLE IF NOT EXISTS report(
@@ -47,3 +59,34 @@ async def init_report_table(pool):
         )
     '''
     )
+
+
+async def fetch_pages() -> List[Page]:
+    async with asyncpg.create_pool(postgres_service()) as pool:
+        await init_page_table(pool)
+        pages = [
+            Page(
+                row['pageid'],
+                row['url'],
+                row['period'],
+                re.compile(row['regex']) if row['regex'] else None,
+            )
+            for row in await pool.fetch('SELECT * FROM page')
+        ]
+
+        return pages
+
+
+async def save_report(conn, r: Report):
+    await conn.execute(
+        '''
+        INSERT INTO report(pageid, elapsed, statuscode, sent, found)
+        VALUES($1, $2, $3, $4, $5)
+    ''',
+        r.pageid,
+        r.elapsed,
+        r.status_code,
+        r.sent,
+        r.found,
+    )
+    print(f'saved to db: {r}')

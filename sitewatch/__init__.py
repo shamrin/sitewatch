@@ -1,45 +1,20 @@
+"""Watch web pages and send reports to Postgres (via Kafka)"""
+
 import sys
 from datetime import datetime
-import re
 import asyncio
 
 import httpx
 import asyncpg
 
-from .kafka import KafkaProducer, KafkaConsumer, kafka_params
-from .db import init_page_table, init_report_table, postgres_service
+from .kafka import KafkaProducer, KafkaConsumer, kafka_params, KAFKA_TOPIC
+from .db import (
+    init_report_table,
+    postgres_service,
+    fetch_pages,
+    save_report,
+)
 from .model import Report, Page
-
-
-async def fetch_pages():
-    async with asyncpg.create_pool(postgres_service()) as pool:
-        await init_page_table(pool)
-        pages = [
-            Page(
-                row['pageid'],
-                row['url'],
-                row['period'],
-                re.compile(row['regex']) if row['regex'] else None,
-            )
-            for row in await pool.fetch('SELECT * FROM page')
-        ]
-
-        return pages
-
-
-async def save_report(conn, r: Report):
-    await conn.execute(
-        '''
-        INSERT INTO report(pageid, elapsed, statuscode, sent, found)
-        VALUES($1, $2, $3, $4, $5)
-    ''',
-        r.pageid,
-        r.elapsed,
-        r.status_code,
-        r.sent,
-        r.found,
-    )
-    print(f'saved to db: {r}')
 
 
 def log_prefix(page: Page) -> str:
@@ -47,6 +22,7 @@ def log_prefix(page: Page) -> str:
 
 
 async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
+    """Check page once"""
     now = datetime.utcnow()
     r = await client.get(page.url)
     found = None if page.regex is None else bool(page.regex.search(r.text))
@@ -62,6 +38,7 @@ async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
 
 
 async def check_and_produce(producer: KafkaProducer, page: Page):
+    """Periodically check page and send reports to Kafka producer, forever"""
     sleep = page.period.total_seconds()
     async with httpx.AsyncClient() as client:
         while True:
@@ -72,10 +49,8 @@ async def check_and_produce(producer: KafkaProducer, page: Page):
             await asyncio.sleep(sleep)
 
 
-KAFKA_TOPIC = 'report-topic'
-
-
 async def consume_and_save_reports():
+    """Listen to Kafka and save reports to database"""
     loop = asyncio.get_event_loop()
 
     async with asyncpg.create_pool(postgres_service()) as pool:

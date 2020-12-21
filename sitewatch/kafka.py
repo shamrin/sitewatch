@@ -1,13 +1,17 @@
+"""Kafka producer and consumer, with service-specific settings"""
+
 import os
 
 import aiokafka
 from aiokafka import AIOKafkaConsumer as KafkaConsumer
 from aiokafka.helpers import create_ssl_context
 
+KAFKA_TOPIC = 'report-topic'
+
 
 # Work-around until fix is merged: https://github.com/aio-libs/aiokafka/pull/701
 class KafkaProducer(aiokafka.AIOKafkaProducer):
-    """Same as a aiokafka class, but works as a context manager"""
+    """Same as aiokafka class, but works as a context manager"""
 
     async def __aenter__(self):
         await self.start()
@@ -15,6 +19,8 @@ class KafkaProducer(aiokafka.AIOKafkaProducer):
 
 
 def kafka_params():
+    """Return Kafka connection params"""
+
     service_uri = os.environ.get('KAFKA_SERVICE_URI')
     assert service_uri, 'KAFKA_SERVICE_URI env var is missing'
     keys_dir = os.environ.get('KAFKA_CERT_DIR')

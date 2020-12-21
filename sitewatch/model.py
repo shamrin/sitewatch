@@ -7,6 +7,8 @@ import re
 
 @dataclass
 class Page:
+    """"Web page to periodically check"""
+
     id: int
     url: str
     period: timedelta
@@ -14,11 +16,15 @@ class Page:
 
 
 class ValidationError(Exception):
+    """Error deserializing Report"""
+
     pass
 
 
 @dataclass
 class Report:
+    """Web page check result"""
+
     pageid: int
     sent: datetime
     elapsed: timedelta
@@ -26,6 +32,7 @@ class Report:
     found: Optional[bool] = None
 
     def tobytes(self) -> bytes:
+        """Serialize"""
         d = asdict(self)
         d['elapsed'] = d['elapsed'].total_seconds()
         d['sent'] = d['sent'].isoformat()
@@ -33,6 +40,7 @@ class Report:
 
     @classmethod
     def frombytes(cls, raw: bytes) -> 'Report':
+        """Deserialize"""
         try:
             d = json.loads(str(raw, 'utf8'))
         except json.JSONDecodeError:
