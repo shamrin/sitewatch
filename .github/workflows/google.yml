@@ -1,0 +1,81 @@
+# This workflow will build a docker container, publish it to Google Container Registry, and deploy it to Compute Engine
+# Based on https://github.com/actions/starter-workflows/blob/main/ci/google.yml
+#
+# To configure this workflow, set up secrets in your workspace:
+# 1. GCP_PROJECT with the name of the project
+# 2. GKE_SA_KEY with the Base64 encoded JSON service account key (https://github.com/GoogleCloudPlatform/github-actions/tree/docs/service-account-key/setup-gcloud#inputs).
+# 3. AIVEN_*
+
+name: Build and Deploy to Google Cloud Compute Engine
+
+on:
+  release:
+    types: [created]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT }}
+  AIVEN_TOKEN: ${{ secrets.AIVEN_TOKEN }}
+  AIVEN_EMAIL: ${{ secrets.AIVEN_EMAIL }}
+  AIVEN_PROJECT: ${{ secrets.AIVEN_PROJECT }}
+  AIVEN_PG_SERVICE: ${{ secrets.AIVEN_PG_SERVICE }}
+  AIVEN_KAFKA_SERVICE: ${{ secrets.AIVEN_KAFKA_SERVICE }}
+  GCP_ZONE: europe-north1-a
+  GCP_REGION: europe-north1
+  IMAGE: sitewatch
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    # Setup gcloud CLI
+    - uses: google-github-actions/setup-gcloud@v0.2.0
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT }}
+
+    # Configure default zone and region
+    - run: |-
+        gcloud compute project-info add-metadata \
+          --metadata google-compute-default-region=$GCP_REGION,google-compute-default-zone=$GCP_ZONE
+
+    # Configure Docker to use the gcloud command-line tool as a credential
+    # helper for authentication
+    - run: |-
+        gcloud --quiet auth configure-docker
+
+    # Build the Docker image
+    - name: Build
+      run: |-
+        docker build \
+          --tag "gcr.io/$PROJECT_ID/$IMAGE" \
+          .
+
+    # Push the Docker image to Google Container Registry
+    - name: Publish
+      run: |-
+        docker push "gcr.io/$PROJECT_ID/$IMAGE"
+
+    - run: |-
+        gcloud compute instances update-container $IMAGE-watch \
+          --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
+          --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
+          --container-env AIVEN_EMAIL=$AIVEN_EMAIL \
+          --container-env AIVEN_PROJECT=$AIVEN_PROJECT \
+          --container-env AIVEN_PG_SERVICE=$AIVEN_PG_SERVICE \
+          --container-env AIVEN_KAFKA_SERVICE=$AIVEN_KAFKA_SERVICE \
+          --container-arg watch
+
+    - run: |-
+        gcloud compute instances update-container $IMAGE-report \
+          --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
+          --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
+          --container-env AIVEN_EMAIL=$AIVEN_EMAIL \
+          --container-env AIVEN_PROJECT=$AIVEN_PROJECT \
+          --container-env AIVEN_PG_SERVICE=$AIVEN_PG_SERVICE \
+          --container-env AIVEN_KAFKA_SERVICE=$AIVEN_KAFKA_SERVICE \
+          --container-arg report
