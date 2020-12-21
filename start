@@ -2,6 +2,11 @@
 
 set -eu
 
+if [ $# -ne 1 ]; then
+    echo "usage: $0 watch|report"
+    exit 1
+fi
+
 AIVEN_CLIENT_JSON='{"project_name": "PROJECT"}'
 AIVEN_CREDENTIALS_JSON='{"auth_token": "TOKEN", "user_email": "EMAIL"}'
 
@@ -37,4 +42,4 @@ export PG_SERVICE_URI="$(cat $ENV_DIR/PG_SERVICE_URI)"
 export KAFKA_SERVICE_URI="$(cat $ENV_DIR/KAFKA_SERVICE_URI)"
 export KAFKA_CERT_DIR="$ENV_DIR"
 
-.venv/bin/python app.py "$1"
+.venv/bin/python app.py "$@"
