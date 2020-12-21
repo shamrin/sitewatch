@@ -1,9 +1,11 @@
 import os
+import sys
 from typing import Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import timedelta, datetime
 import re
 import asyncio
+import json
 
 import httpx
 import asyncpg
@@ -21,11 +23,28 @@ class Page:
 
 @dataclass
 class Report:
-    page: Page
+    pageid: int
     sent: datetime
     elapsed: timedelta
     status_code: int
     found: Optional[bool] = None
+
+    def tobytes(self) -> bytes:
+        d = asdict(self)
+        d['elapsed'] = d['elapsed'].total_seconds()
+        d['sent'] = d['sent'].isoformat()
+        return json.dumps(d).encode('utf8')
+
+    @classmethod
+    def frombytes(cls, raw: bytes) -> 'Report':
+        d = json.loads(str(raw, 'utf8'))
+        return Report(
+            pageid=d['pageid'],
+            sent=datetime.fromisoformat(d['sent']),
+            elapsed=timedelta(seconds=d['elapsed']),
+            status_code=d['status_code'],
+            found=d['found'],
+        )
 
 async def connect_db():
     db = os.environ.get('PG_SERVICE_URI')
@@ -78,7 +97,7 @@ async def save_report(r: Report):
     await conn.execute('''
         INSERT INTO report(pageid, elapsed, statuscode, sent, found)
         VALUES($1, $2, $3, $4, $5)
-    ''', r.page.id, r.elapsed, r.status_code, r.sent, r.found,
+    ''', r.pageid, r.elapsed, r.status_code, r.sent, r.found,
     )
 
     await conn.close()
@@ -88,19 +107,20 @@ async def check(page: Page):
     sleep = page.period.total_seconds()
     async with httpx.AsyncClient() as client:
         while True:
-            now = datetime.now()
+            now = datetime.utcnow()
             r = await client.get(page.url)
             prefix = f'pageid:{page.id} url:{page.url} period:{page.period} regex:{page.regex.pattern if page.regex else None}:'
             found = None if page.regex is None else bool(page.regex.search(r.text))
             if found is not None:
                 print(prefix, 'OK' if found else 'ERROR')
             report = Report(
-                page = page,
+                pageid = page.id,
                 sent = now,
                 elapsed = r.elapsed,
                 status_code = r.status_code,
                 found = found,
             )
+            await send_one(report.tobytes())
             await save_report(report)
             print(prefix, f'waiting {sleep}s...')
             await asyncio.sleep(sleep)
@@ -132,22 +152,23 @@ def get_kafka_connection_params():
 
     return params
 
-async def send_one(loop):
+async def send_one(message: bytes):
+    loop = asyncio.get_event_loop()
     producer = AIOKafkaProducer(loop=loop, **get_kafka_connection_params())
     # print('producer connecting to kafka cluster')
     await producer.start()
     # print('producer connected')
     try:
         # print('sending message')
-        record = await producer.send_and_wait(KAFKA_TOPIC, b"Super message")
+        record = await producer.send_and_wait(KAFKA_TOPIC, message)
         print('message sent', record)
     finally:
         print('waiting for message delivery')
         await producer.stop()
         print('messages delivered (or expired)')
 
-
-async def consume(loop):
+async def consume():
+    loop = asyncio.get_event_loop()
     consumer = AIOKafkaConsumer(KAFKA_TOPIC, loop=loop, group_id="my-group", **get_kafka_connection_params())
     print('consumer connecting to kafka cluster')
     await consumer.start()
@@ -155,6 +176,8 @@ async def consume(loop):
     try:
         async for msg in consumer:
             print("consumed: ", msg)
+            report = Report.frombytes(msg.value)
+            await save_report(report)
     finally:
         # Will leave consumer group; perform autocommit if enabled.
         print("stopping consumer")
@@ -162,22 +185,20 @@ async def consume(loop):
         print("consumer stopped")
 
 
-async def main():
-    print('starting up')
+async def main(mode):
+    print(f'starting up {mode}')
 
-    pages = await fetch_urls()
-
-    for page in pages:
-        asyncio.create_task(check(page))
-
-    loop = asyncio.get_event_loop()
-    asyncio.create_task(consume(loop))
-    await asyncio.sleep(5)
-    for _ in range(5):
-        await send_one(loop)
+    if mode == 'watch':
+        pages = await fetch_urls()
+        for page in pages:
+            asyncio.create_task(check(page))
+    elif mode == 'report':
+        asyncio.create_task(consume())
+    else:
+        sys.exit(f'unknown mode {mode}')
 
     # TODO remove this
     await asyncio.sleep(1000)
 
-def start():
-    asyncio.run(main())
+def start(mode):
+    asyncio.run(main(mode))
