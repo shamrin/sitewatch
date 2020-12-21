@@ -4,6 +4,7 @@ import aiokafka
 from aiokafka import AIOKafkaConsumer as KafkaConsumer
 from aiokafka.helpers import create_ssl_context
 
+
 # Work-around until fix is merged: https://github.com/aio-libs/aiokafka/pull/701
 class KafkaProducer(aiokafka.AIOKafkaProducer):
     """Same as a aiokafka class, but works as a context manager"""
@@ -11,6 +12,7 @@ class KafkaProducer(aiokafka.AIOKafkaProducer):
     async def __aenter__(self):
         await self.start()
         return self
+
 
 def kafka_params():
     service_uri = os.environ.get('KAFKA_SERVICE_URI')
@@ -26,13 +28,13 @@ def kafka_params():
         # Note: Python doesn't support loading SSL cert and key from memory.
         # As of December 2020, it's not yet implemented (8 years and counting):
         # https://bugs.python.org/issue16487, https://bugs.python.org/issue18369
-        ssl_context = create_ssl_context(
+        ssl_context=create_ssl_context(
             cafile=os.path.join(keys_dir, "ca.pem"),
             certfile=os.path.join(keys_dir, "service.cert"),
             keyfile=os.path.join(keys_dir, "service.key"),
         ),
-        bootstrap_servers = service_uri,
-        security_protocol = 'SSL',
+        bootstrap_servers=service_uri,
+        security_protocol='SSL',
     )
 
     return params

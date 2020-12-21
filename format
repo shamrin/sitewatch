@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -ex
+
+SOURCES=(sitewatch *.py tests)
+poetry run black "${SOURCES[@]}"

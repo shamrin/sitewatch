@@ -4,6 +4,7 @@ from datetime import timedelta, datetime
 import json
 import re
 
+
 @dataclass
 class Page:
     id: int
@@ -11,8 +12,10 @@ class Page:
     period: timedelta
     regex: Optional[re.Pattern[str]]
 
+
 class ValidationError(Exception):
     pass
+
 
 @dataclass
 class Report:

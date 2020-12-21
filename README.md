@@ -31,14 +31,19 @@ Build and start Docker container:
 ./docker-start
 ```
 
-Run tests:
+Lint and test:
 ```
-./test
+./lint && ./test
 ```
 
 To update the snapshots (in case of "snapshots failed" error):
 ```
 ./test.sh --snapshot-update
+```
+
+Format code with [black](https://github.com/ambv/black):
+```
+./format
 ```
 
 ## Deploy

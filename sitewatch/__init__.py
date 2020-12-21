@@ -10,26 +10,41 @@ from .kafka import KafkaProducer, KafkaConsumer, kafka_params
 from .db import init_page_table, init_report_table, postgres_service
 from .model import Report, Page
 
+
 async def fetch_pages():
     async with asyncpg.create_pool(postgres_service()) as pool:
         await init_page_table(pool)
         pages = [
-            Page(row['pageid'], row['url'], row['period'], re.compile(row['regex']) if row['regex'] else None)
+            Page(
+                row['pageid'],
+                row['url'],
+                row['period'],
+                re.compile(row['regex']) if row['regex'] else None,
+            )
             for row in await pool.fetch('SELECT * FROM page')
         ]
 
         return pages
 
+
 async def save_report(conn, r: Report):
-    await conn.execute('''
+    await conn.execute(
+        '''
         INSERT INTO report(pageid, elapsed, statuscode, sent, found)
         VALUES($1, $2, $3, $4, $5)
-    ''', r.pageid, r.elapsed, r.status_code, r.sent, r.found,
+    ''',
+        r.pageid,
+        r.elapsed,
+        r.status_code,
+        r.sent,
+        r.found,
     )
     print(f'saved to db: {r}')
 
+
 def log_prefix(page: Page) -> str:
     return f'pageid:{page.id} url:{page.url} period:{page.period} regex:{page.regex.pattern if page.regex else None}:'
+
 
 async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
     now = datetime.utcnow()
@@ -38,12 +53,13 @@ async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
     if found is not None:
         print(log_prefix(page), 'OK' if found else 'ERROR')
     return Report(
-        pageid = page.id,
-        sent = now,
-        elapsed = r.elapsed,
-        status_code = r.status_code,
-        found = found,
+        pageid=page.id,
+        sent=now,
+        elapsed=r.elapsed,
+        status_code=r.status_code,
+        found=found,
     )
+
 
 async def check_and_produce(producer: KafkaProducer, page: Page):
     sleep = page.period.total_seconds()
@@ -55,14 +71,18 @@ async def check_and_produce(producer: KafkaProducer, page: Page):
             print(log_prefix(page), f'waiting {sleep}s...')
             await asyncio.sleep(sleep)
 
+
 KAFKA_TOPIC = 'report-topic'
+
 
 async def consume_and_save_reports():
     loop = asyncio.get_event_loop()
 
     async with asyncpg.create_pool(postgres_service()) as pool:
         await init_report_table(pool)
-        async with KafkaConsumer(KAFKA_TOPIC, loop=loop, group_id="my-group", **kafka_params()) as consumer:
+        async with KafkaConsumer(
+            KAFKA_TOPIC, loop=loop, group_id="my-group", **kafka_params()
+        ) as consumer:
             print('consuming Kafka messages')
             async for msg in consumer:
                 print("consumed: ", msg)
@@ -78,13 +98,12 @@ async def main(mode):
         pages = await fetch_pages()
         async with KafkaProducer(loop=loop, **kafka_params()) as producer:
             print('connected to Kafka')
-            await asyncio.gather(*[
-                check_and_produce(producer, page) for page in pages
-            ])
+            await asyncio.gather(*[check_and_produce(producer, page) for page in pages])
     elif mode == 'report':
         await consume_and_save_reports()
     else:
         sys.exit(f'error: unknown mode {mode}')
+
 
 def start(mode):
     asyncio.run(main(mode))
