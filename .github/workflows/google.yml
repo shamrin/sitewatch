@@ -42,11 +42,6 @@ jobs:
         service_account_key: ${{ secrets.GCP_SA_KEY }}
         project_id: ${{ secrets.GCP_PROJECT }}
 
-    # Configure default zone and region
-    - run: |-
-        gcloud compute project-info add-metadata \
-          --metadata google-compute-default-region=$GCP_REGION,google-compute-default-zone=$GCP_ZONE
-
     # Configure Docker to use the gcloud command-line tool as a credential
     # helper for authentication
     - run: |-
@@ -66,6 +61,7 @@ jobs:
 
     - run: |-
         gcloud compute instances update-container $IMAGE-watch \
+          --region $GCP_REGION --zone $GCP_ZONE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
           --container-env AIVEN_EMAIL=$AIVEN_EMAIL \
@@ -76,6 +72,7 @@ jobs:
 
     - run: |-
         gcloud compute instances update-container $IMAGE-report \
+          --region $GCP_REGION --zone $GCP_ZONE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
           --container-env AIVEN_EMAIL=$AIVEN_EMAIL \
