@@ -10,9 +10,8 @@ import json
 import httpx
 import asyncpg
 
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
-from aiokafka.helpers import create_ssl_context
-
+from .kafka import KafkaProducer, KafkaConsumer, kafka_params
+from .db import init_page_table, init_report_table, postgres_service
 
 @dataclass
 class Page:
@@ -46,159 +45,81 @@ class Report:
             found=d['found'],
         )
 
-async def connect_db():
-    db = os.environ.get('PG_SERVICE_URI')
-    assert db, 'PG_SERVICE_URI env var is missing'
-    return await asyncpg.connect(db)
+async def fetch_pages():
+    async with asyncpg.create_pool(postgres_service()) as pool:
+        await init_page_table(pool)
+        pages = [
+            Page(row['pageid'], row['url'], row['period'], re.compile(row['regex']) if row['regex'] else None)
+            for row in await pool.fetch('SELECT * FROM page')
+        ]
 
-async def fetch_urls():
-    conn = await connect_db()
+        return pages
 
-    await conn.execute('''
-        CREATE TABLE IF NOT EXISTS page(
-            pageid serial PRIMARY KEY,
-            url text NOT NULL,
-            period interval DEFAULT interval '5 minute',
-            regex text,
-            UNIQUE (url, period, regex)
-        )
-    ''')
-
-    # Add page fixtures to have something interesting in the database
-    await conn.executemany('''
-        INSERT INTO page(url, period, regex) VALUES($1, $2, $3)
-        ON CONFLICT DO NOTHING
-    ''', [('https://httpbin.org/get', timedelta(minutes=5), r'Agent.*httpx'),
-          ('https://google.com', timedelta(minutes=10), 'evil')])
-
-    pages = [
-        Page(row['pageid'], row['url'], row['period'], re.compile(row['regex']) if row['regex'] else None)
-        for row in await conn.fetch('SELECT * FROM page')
-    ]
-
-    await conn.close()
-
-    return pages
-
-async def save_report(r: Report):
-    conn = await connect_db()
-
-    await conn.execute('''
-        CREATE TABLE IF NOT EXISTS report(
-            responseid serial PRIMARY KEY,
-            pageid integer NOT NULL REFERENCES page ON DELETE CASCADE,
-            elapsed interval NOT NULL,
-            statuscode int NOT NULL,
-            sent timestamp NOT NULL,
-            found boolean
-        )
-    ''')
-
+async def save_report(conn, r: Report):
     await conn.execute('''
         INSERT INTO report(pageid, elapsed, statuscode, sent, found)
         VALUES($1, $2, $3, $4, $5)
     ''', r.pageid, r.elapsed, r.status_code, r.sent, r.found,
     )
+    print(f'saved to db: {r}')
 
-    await conn.close()
+def log_prefix(page: Page) -> str:
+    return f'pageid:{page.id} url:{page.url} period:{page.period} regex:{page.regex.pattern if page.regex else None}:'
 
+async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
+    now = datetime.utcnow()
+    r = await client.get(page.url)
+    found = None if page.regex is None else bool(page.regex.search(r.text))
+    if found is not None:
+        print(log_prefix(page), 'OK' if found else 'ERROR')
+    return Report(
+        pageid = page.id,
+        sent = now,
+        elapsed = r.elapsed,
+        status_code = r.status_code,
+        found = found,
+    )
 
-async def check(page: Page):
+async def check_and_produce(producer: KafkaProducer, page: Page):
     sleep = page.period.total_seconds()
     async with httpx.AsyncClient() as client:
         while True:
-            now = datetime.utcnow()
-            r = await client.get(page.url)
-            prefix = f'pageid:{page.id} url:{page.url} period:{page.period} regex:{page.regex.pattern if page.regex else None}:'
-            found = None if page.regex is None else bool(page.regex.search(r.text))
-            if found is not None:
-                print(prefix, 'OK' if found else 'ERROR')
-            report = Report(
-                pageid = page.id,
-                sent = now,
-                elapsed = r.elapsed,
-                status_code = r.status_code,
-                found = found,
-            )
-            await send_one(report.tobytes())
-            await save_report(report)
-            print(prefix, f'waiting {sleep}s...')
+            report = await check_page(client, page)
+            record = await producer.send_and_wait(KAFKA_TOPIC, report.tobytes())
+            print('message sent', record)
+            print(log_prefix(page), f'waiting {sleep}s...')
             await asyncio.sleep(sleep)
 
 KAFKA_TOPIC = 'report-topic'
 
-def get_kafka_connection_params():
-    service_uri = os.environ.get('KAFKA_SERVICE_URI')
-    assert service_uri, 'KAFKA_SERVICE_URI env var is missing'
-    keys_dir = os.environ.get('KAFKA_CERT_DIR')
-    assert keys_dir, 'KAFKA_CERT_DIR env var is missing'
-
-    params = dict(
-        # See aiokafka documentation about SSL context:
-        # * https://aiokafka.readthedocs.io/en/stable/#getting-started
-        # * https://aiokafka.readthedocs.io/en/stable/examples/ssl_consume_produce.html
-        #
-        # Note: Python doesn't support loading SSL cert and key from memory.
-        # As of December 2020, it's not yet implemented (8 years and counting):
-        # https://bugs.python.org/issue16487, https://bugs.python.org/issue18369
-        ssl_context = create_ssl_context(
-            cafile=os.path.join(keys_dir, "ca.pem"),
-            certfile=os.path.join(keys_dir, "service.cert"),
-            keyfile=os.path.join(keys_dir, "service.key"),
-        ),
-        bootstrap_servers = service_uri,
-        security_protocol = 'SSL',
-    )
-
-    return params
-
-async def send_one(message: bytes):
+async def consume_and_save_reports():
     loop = asyncio.get_event_loop()
-    producer = AIOKafkaProducer(loop=loop, **get_kafka_connection_params())
-    # print('producer connecting to kafka cluster')
-    await producer.start()
-    # print('producer connected')
-    try:
-        # print('sending message')
-        record = await producer.send_and_wait(KAFKA_TOPIC, message)
-        print('message sent', record)
-    finally:
-        print('waiting for message delivery')
-        await producer.stop()
-        print('messages delivered (or expired)')
 
-async def consume():
-    loop = asyncio.get_event_loop()
-    consumer = AIOKafkaConsumer(KAFKA_TOPIC, loop=loop, group_id="my-group", **get_kafka_connection_params())
-    print('consumer connecting to kafka cluster')
-    await consumer.start()
-    print('consumer connected')
-    try:
-        async for msg in consumer:
-            print("consumed: ", msg)
-            report = Report.frombytes(msg.value)
-            await save_report(report)
-    finally:
-        # Will leave consumer group; perform autocommit if enabled.
-        print("stopping consumer")
-        await consumer.stop()
-        print("consumer stopped")
+    async with asyncpg.create_pool(postgres_service()) as pool:
+        await init_report_table(pool)
+        async with KafkaConsumer(KAFKA_TOPIC, loop=loop, group_id="my-group", **kafka_params()) as consumer:
+            print('consuming Kafka messages')
+            async for msg in consumer:
+                print("consumed: ", msg)
+                report = Report.frombytes(msg.value)
+                await save_report(pool, report)
 
 
 async def main(mode):
     print(f'starting up {mode}')
+    loop = asyncio.get_event_loop()
 
     if mode == 'watch':
-        pages = await fetch_urls()
-        for page in pages:
-            asyncio.create_task(check(page))
+        pages = await fetch_pages()
+        async with KafkaProducer(loop=loop, **kafka_params()) as producer:
+            print('connected to Kafka')
+            await asyncio.gather(*[
+                check_and_produce(producer, page) for page in pages
+            ])
     elif mode == 'report':
-        asyncio.create_task(consume())
+        await consume_and_save_reports()
     else:
-        sys.exit(f'unknown mode {mode}')
-
-    # TODO remove this
-    await asyncio.sleep(1000)
+        sys.exit(f'error: unknown mode {mode}')
 
 def start(mode):
     asyncio.run(main(mode))
