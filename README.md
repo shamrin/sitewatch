@@ -1,5 +1,7 @@
 # sitewatch
 
+![Retool demo](./sitewatch.gif)
+
 `sitewatch` is an experiment to play with:
 
 - [Google Cloud](https://cloud.google.com/): [Containers on Compute Engine](https://cloud.google.com/compute/docs/containers)
