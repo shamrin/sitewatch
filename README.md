@@ -2,7 +2,7 @@
 
 ![Retool demo](./sitewatch.gif)
 
-**The UI is made in [Retool](https://retool.com/) service.**
+**(The UI is made in [Retool](https://retool.com/), drag-and-drop build-your-own-admin-UI service. It's very easy.)**
 
 `sitewatch` is an experiment to play with:
 
