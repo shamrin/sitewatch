@@ -2,7 +2,7 @@ import pytest
 
 from datetime import datetime, timedelta
 
-from sitewatch import Report, ValidationError
+from sitewatch.model import Report, ValidationError
 
 @pytest.mark.parametrize('found', [None, True, False])
 def test_report_model(snapshot, found):
