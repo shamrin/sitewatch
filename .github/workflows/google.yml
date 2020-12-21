@@ -9,8 +9,12 @@
 name: Build and Deploy to Google Cloud Compute Engine
 
 on:
-  release:
-    types: [created]
+  push:
+    branches: [ main ]
+
+# on:
+#   release:
+#     types: [created]
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT }}
