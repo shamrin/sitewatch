@@ -90,7 +90,7 @@ async def watch_pages():
                     await listen_page(conn, cancel_scope)
 
 
-async def main(mode):
+async def run(mode):
     print(f'starting up {mode}')
     if mode == 'watch':
         await watch_pages()
@@ -100,5 +100,5 @@ async def main(mode):
         sys.exit(f'error: unknown mode {mode}')
 
 
-def start(mode):
-    trio_asyncio.run(main, mode)
+def main(mode):
+    trio_asyncio.run(run, mode)

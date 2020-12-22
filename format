@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 set -ex
 
-SOURCES=(sitewatch *.py tests)
+SOURCES=(sitewatch tests)
 poetry run black "${SOURCES[@]}"
