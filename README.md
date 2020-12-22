@@ -79,5 +79,4 @@ gcloud init
 gcloud config set run/region europe-north1
 ```
 
-
 *to be continued*
