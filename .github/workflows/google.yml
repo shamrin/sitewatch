@@ -26,7 +26,7 @@ env:
 
 jobs:
   setup-build-publish-deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.ref == 'refs.head.main' }}
 
     name: Setup, Build, Publish, and Deploy
     runs-on: ubuntu-latest
