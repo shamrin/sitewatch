@@ -61,15 +61,6 @@ async def consume_and_save_reports():
                 await db.save_report(conn, report)
 
 
-async def listen_page(conn, cancel_scope):
-    """Listen for `page` table changes, restart if needed"""
-    async with db.listen(conn, db.PAGE_CHANNEL) as receive_channel:
-        print('pg: LISTEN page.change')
-        async for _ in receive_channel:
-            print('pg: received notification, restarting')
-            cancel_scope.cancel()
-
-
 async def watch_pages():
     """"Watch page URLs and send reports to Kafka"""
     loop = asyncio.get_event_loop()
@@ -79,15 +70,23 @@ async def watch_pages():
     ) as producer:
         print('connected to Kafka and Postgres')
 
-        # loop to allow restarting when listen_page cancels periodic checks
-        while True:
-            print('fetching pages')
-            pages = await db.fetch_pages(conn)
-            with trio.CancelScope() as cancel_scope:
-                async with trio.open_nursery() as nursery:
-                    for page in pages:
-                        nursery.start_soon(check_and_produce, producer, page)
-                    await listen_page(conn, cancel_scope)
+        async with db.listen(conn, db.PAGE_CHANNEL) as notifications:
+            print(f'pg: LISTEN {db.PAGE_CHANNEL}')
+
+            # loop to allow restarting after .cancel()
+            while True:
+                print('fetching pages')
+                pages = await db.fetch_pages(conn)
+                with trio.CancelScope() as cancel_scope:
+                    async with trio.open_nursery() as nursery:
+                        # check pages in the background
+                        for page in pages:
+                            nursery.start_soon(check_and_produce, producer, page)
+
+                        # restart on `page` table changes
+                        async for _ in notifications:
+                            print(f'pg: received {db.PAGE_CHANNEL}, restarting')
+                            cancel_scope.cancel()
 
 
 async def run(mode):
