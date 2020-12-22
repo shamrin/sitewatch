@@ -10,7 +10,8 @@ name: sitewatch deploy
 
 on:
   workflow_run:
-    workflows: ["sitewatch test"]
+    workflows: [ "sitewatch test "]
+    branches: [ main ]
     types:
       - completed
 
@@ -26,7 +27,7 @@ env:
 
 jobs:
   setup-build-publish-deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.ref == 'refs.head.main' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     name: Setup, Build, Publish, and Deploy
     runs-on: ubuntu-latest
