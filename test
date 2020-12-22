@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-set -ex
+set -eux
 
 LC_ALL=fi_FI.UTF-8 poetry run python -m pytest --doctest-modules "$@"
