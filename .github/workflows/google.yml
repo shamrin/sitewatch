@@ -10,7 +10,7 @@ name: sitewatch deploy
 
 on:
   workflow_run:
-    workflows: [ "sitewatch test "]
+    workflows: [ "sitewatch test" ]
     branches: [ main ]
     types:
       - completed
