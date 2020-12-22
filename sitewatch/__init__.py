@@ -63,7 +63,6 @@ async def consume_and_save_reports():
 
 async def listen_page(conn, cancel_scope):
     """Listen for `page` table changes, restart if needed"""
-
     async with db.listen(conn, db.PAGE_CHANNEL) as receive_channel:
         print('pg: LISTEN page.change')
         async for _ in receive_channel:
@@ -71,29 +70,32 @@ async def listen_page(conn, cancel_scope):
             cancel_scope.cancel()
 
 
-async def main(mode):
-    print(f'starting up {mode}')
+async def watch_pages():
+    """"Watch page URLs and send reports to Kafka"""
     loop = asyncio.get_event_loop()
 
+    async with db.connect() as conn, KafkaProducer(
+        loop=loop, **kafka_params()
+    ) as producer:
+        print('connected to Kafka and Postgres')
+
+        # loop to allow restarting when listen_page cancels periodic checks
+        while True:
+            print('fetching pages')
+            pages = await db.fetch_pages(conn)
+            with trio.CancelScope() as cancel_scope:
+                async with trio.open_nursery() as nursery:
+                    for page in pages:
+                        nursery.start_soon(check_and_produce, producer, page)
+                    await listen_page(conn, cancel_scope)
+
+
+async def main(mode):
+    print(f'starting up {mode}')
     if mode == 'watch':
-        async with db.connect() as conn, KafkaProducer(
-            loop=loop, **kafka_params()
-        ) as producer:
-            print('connected to Kafka and Postgres')
-
-            # loop to allow restarting when listen_page cancels periodic checks
-            while True:
-                print('fetching pages')
-                pages = await db.fetch_pages(conn)
-                with trio.CancelScope() as cancel_scope:
-                    async with trio.open_nursery() as nursery:
-                        for page in pages:
-                            nursery.start_soon(check_and_produce, producer, page)
-                        await listen_page(conn, cancel_scope)
-
+        await watch_pages()
     elif mode == 'report':
         await consume_and_save_reports()
-
     else:
         sys.exit(f'error: unknown mode {mode}')
 
