@@ -1,29 +1,28 @@
-from unittest.mock import MagicMock, AsyncMock, Mock
+from unittest.mock import AsyncMock
 
-import trio
-import trio.testing
+import pytest
 
 from sitewatch.db import listen
 
 
-def test_listen():
-    class MockConnection:
-        remove_listener = AsyncMock()
+class MockDbConnection:
+    remove_listener = AsyncMock()
 
-        async def add_listener(self, channel, callback):
-            callback('conn', 'pid', channel, 'payload')
+    async def add_listener(self, channel, callback):
+        callback('conn', 'pid', channel, 'payload')
 
-    async def run(conn):
-        async with listen(conn, 'changes') as channel:
-            with trio.move_on_after(1):
-                async for payload in channel:
-                    assert payload == 'payload'
 
-    conn = MockConnection()
-    clock = trio.testing.MockClock(autojump_threshold=0)
-    trio.run(run, conn, clock=clock)
+@pytest.fixture
+def db_connection():
+    return MockDbConnection()
+
+
+async def test_listen(db_connection):
+    async with listen(db_connection, 'changes') as channel:
+        async for payload in channel:
+            assert payload == 'payload'
+            break
 
     # assert that remove_listener has been called
-    conn.remove_listener.assert_awaited_once()
-    assert len(conn.remove_listener.await_args) == 2
-    assert conn.remove_listener.await_args.args[0] == 'changes'
+    db_connection.remove_listener.assert_awaited_once()
+    assert db_connection.remove_listener.await_args.args[0] == 'changes'

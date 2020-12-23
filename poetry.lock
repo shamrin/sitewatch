@@ -350,6 +350,20 @@ atomicwrites = {version = ">=1.0", markers = "sys_platform == \"win32\""}
 testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "requests", "xmlschema"]
 
 [[package]]
+name = "pytest-trio"
+version = "0.7.0"
+description = "Pytest plugin for trio"
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+trio = ">=0.15.0"
+outcome = "*"
+async_generator = ">=1.9"
+pytest = ">=3.6"
+
+[[package]]
 name = "regex"
 version = "2020.11.13"
 description = "Alternative regular expression module, to replace re."
@@ -530,7 +544,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "d4e158b2d3a0d87beab36287652d7a9d8d70f3099c6aaefed8822d62e069f2f5"
+content-hash = "cae68d24566228519334b30d5ae0360bf245954bf3dabc183aa18008e145b7ff"
 
 [metadata.files]
 aiokafka = [
@@ -745,6 +759,9 @@ pyparsing = [
 pytest = [
     {file = "pytest-6.2.1-py3-none-any.whl", hash = "sha256:1969f797a1a0dbd8ccf0fecc80262312729afea9c17f1d70ebf85c5e76c6f7c8"},
     {file = "pytest-6.2.1.tar.gz", hash = "sha256:66e419b1899bc27346cb2c993e12c5e5e8daba9073c1fbce33b9807abc95c306"},
+]
+pytest-trio = [
+    {file = "pytest-trio-0.7.0.tar.gz", hash = "sha256:c01b741819aec2c419555f28944e132d3c711dae1e673d63260809bf92c30c31"},
 ]
 regex = [
     {file = "regex-2020.11.13-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:8b882a78c320478b12ff024e81dc7d43c1462aa4a3341c754ee65d857a521f85"},

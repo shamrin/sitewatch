@@ -1,50 +1,52 @@
 from datetime import datetime, timedelta
 import re
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock
 
+import pytest
 import trio
 import trio.testing
-import httpx
 
 from sitewatch.model import Report, Page
 import sitewatch
 from sitewatch import check_and_produce
 
-MOCK_REPORT = Report(
-    pageid=42,
-    sent=datetime(2020, 1, 1, 1, 1, 1),
-    elapsed=timedelta(minutes=1),
-    status_code=200,
-    found=True,
-)
+
+@pytest.fixture
+def report():
+    return Report(
+        pageid=42,
+        sent=datetime(2020, 1, 1, 1, 1, 1),
+        elapsed=timedelta(minutes=1),
+        status_code=200,
+        found=True,
+    )
 
 
-def test_check_and_produce(monkeypatch, snapshot):
+class MockKafkaProducer:
+    send_and_wait = AsyncMock()
+
+
+@pytest.fixture
+def kafka_producer():
+    return MockKafkaProducer()
+
+
+async def test_check_and_produce(
+    monkeypatch, snapshot, report, kafka_producer, autojump_clock
+):
     """Test periodic page checking"""
 
-    times = []
-    period_minutes = 1
+    minutes = 1
+    page = Page(42, 'example.com', timedelta(minutes=minutes), re.compile(r''))
 
-    class MockKafkaProducer:
-        send_and_wait = AsyncMock()
-
-    async def mock_check_page(*args):
-        times.append(trio.current_time())
-        return MOCK_REPORT
+    async def mock_check_page(_, page_to_check):
+        snapshot.assert_match(trio.current_time())
+        assert page_to_check == page
+        return report
 
     monkeypatch.setattr(sitewatch, 'check_page', mock_check_page)
 
-    monkeypatch.setattr(httpx, 'AsyncClient', MagicMock)
+    with trio.move_on_after(minutes * 60 * 3 - 0.1):
+        await check_and_produce(kafka_producer, page)
 
-    async def cancel(fn, *arg):
-        with trio.move_on_after(period_minutes * 60 * 3 - 0.1):
-            await fn(*arg)
-
-    page = Page(42, 'example.com', timedelta(minutes=period_minutes), re.compile(r''))
-
-    clock = trio.testing.MockClock(autojump_threshold=0)
-    trio.run(cancel, check_and_produce, MockKafkaProducer(), page, clock=clock)
-
-    snapshot.assert_match(times)
-
-    assert MockKafkaProducer.send_and_wait.call_count == 3
+    assert kafka_producer.send_and_wait.call_count == 3
