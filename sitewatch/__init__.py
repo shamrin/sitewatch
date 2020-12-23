@@ -77,16 +77,15 @@ async def watch_pages():
             while True:
                 print('fetching pages')
                 pages = await db.fetch_pages(conn)
-                with trio.CancelScope() as cancel_scope:
-                    async with trio.open_nursery() as nursery:
-                        # check pages in the background
-                        for page in pages:
-                            nursery.start_soon(check_and_produce, producer, page)
+                async with trio.open_nursery() as nursery:
+                    # check pages in the background
+                    for page in pages:
+                        nursery.start_soon(check_and_produce, producer, page)
 
-                        # restart on `page` table changes
-                        async for _ in notifications:
-                            print(f'pg: received {db.PAGE_CHANNEL}, restarting')
-                            cancel_scope.cancel()
+                    # restart on `page` table changes
+                    async for _ in notifications:
+                        print(f'pg: received {db.PAGE_CHANNEL}, restarting')
+                        nursery.cancel_scope.cancel()
 
 
 async def run(mode):
