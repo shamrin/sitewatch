@@ -1,12 +1,23 @@
 """Kafka producer and consumer, with service-specific settings and trio compat"""
 
 import os
+import asyncio
 
 from trio_asyncio import aio_as_trio
 import aiokafka
 from aiokafka.helpers import create_ssl_context
 
 KAFKA_TOPIC = 'report-topic'
+
+
+def open_producer():
+    return KafkaProducer(loop=asyncio.get_event_loop(), **kafka_params())
+
+
+def open_consumer(topic):
+    return KafkaConsumer(
+        topic, group_id='my-group', loop=asyncio.get_event_loop(), **kafka_params()
+    )
 
 
 class KafkaProducer(aiokafka.AIOKafkaProducer):
@@ -68,6 +79,3 @@ def kafka_params():
     )
 
     return params
-
-
-__all__ = ['KafkaConsumer', 'KafkaProducer']

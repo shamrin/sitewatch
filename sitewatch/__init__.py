@@ -2,13 +2,17 @@
 
 import sys
 from datetime import datetime
-import asyncio
 
 import trio
 import trio_asyncio
 import httpx
 
-from .kafka import KafkaProducer, KafkaConsumer, kafka_params, KAFKA_TOPIC
+from .kafka import (
+    KafkaProducer,
+    open_producer,
+    open_consumer,
+    KAFKA_TOPIC,
+)
 from . import db
 from .model import Report, Page
 
@@ -47,13 +51,9 @@ async def check_and_produce(producer: KafkaProducer, page: Page):
 
 async def consume_and_save_reports():
     """Listen to Kafka and save reports to database"""
-    loop = asyncio.get_event_loop()
-
     async with db.connect() as conn:
         await db.init_report_table(conn)
-        async with KafkaConsumer(
-            KAFKA_TOPIC, loop=loop, group_id="my-group", **kafka_params()
-        ) as consumer:
+        async with open_consumer(KAFKA_TOPIC) as consumer:
             print('consuming Kafka messages')
             async for msg in consumer:
                 print("consumed: ", msg)
@@ -63,11 +63,7 @@ async def consume_and_save_reports():
 
 async def watch_pages():
     """"Watch page URLs and send reports to Kafka"""
-    loop = asyncio.get_event_loop()
-
-    async with db.connect() as conn, KafkaProducer(
-        loop=loop, **kafka_params()
-    ) as producer:
+    async with db.connect() as conn, open_producer() as producer:
         print('connected to Kafka and Postgres')
 
         async with db.listen(conn, db.PAGE_CHANNEL) as notifications:
