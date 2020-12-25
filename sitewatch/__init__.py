@@ -32,8 +32,8 @@ async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
     )
 
 
-async def check_and_produce(producer: kafka.Producer, page: Page):
-    """Periodically check page and send reports to Kafka producer, forever"""
+async def watch_page(producer: kafka.Producer, page: Page):
+    """Continuously check page and send reports to Kafka"""
     sleep = page.period.total_seconds()
     async with httpx.AsyncClient() as client:
         while True:
@@ -42,18 +42,6 @@ async def check_and_produce(producer: kafka.Producer, page: Page):
             print(f'pageid:{page.id} message sent offset:{record.offset}')
             print(log_prefix(page), f'waiting {sleep}s...')
             await trio.sleep(sleep)
-
-
-async def consume_and_save_reports():
-    """Listen to Kafka and save reports to database"""
-    async with db.connect() as conn:
-        await db.init_report_table(conn)
-        async with kafka.open_consumer(kafka.TOPIC) as consumer:
-            print('consuming Kafka messages')
-            async for msg in consumer:
-                print(f'consumed: offset:{msg.offset} {msg.value}')
-                report = Report.frombytes(msg.value)
-                await db.save_report(conn, report)
 
 
 async def watch_pages():
@@ -72,7 +60,7 @@ async def watch_pages():
                 async with trio.open_nursery() as nursery:
                     # check pages in the background
                     for page in pages:
-                        nursery.start_soon(check_and_produce, producer, page)
+                        nursery.start_soon(watch_page, producer, page)
 
                     # restart on `page` table changes
                     async for _ in notifications:
@@ -80,12 +68,24 @@ async def watch_pages():
                         nursery.cancel_scope.cancel()
 
 
+async def watch_reports():
+    """Listen to Kafka and save reports to database"""
+    async with db.connect() as conn:
+        await db.init_report_table(conn)
+        async with kafka.open_consumer(kafka.TOPIC) as consumer:
+            print('consuming Kafka messages')
+            async for msg in consumer:
+                print(f'consumed: offset:{msg.offset} {msg.value}')
+                report = Report.frombytes(msg.value)
+                await db.save_report(conn, report)
+
+
 async def run(mode):
     print(f'starting up {mode}')
     if mode == 'watch':
         await watch_pages()
     elif mode == 'report':
-        await consume_and_save_reports()
+        await watch_reports()
     else:
         sys.exit(f'error: unknown mode {mode}')
 
