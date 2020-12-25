@@ -79,5 +79,11 @@ gcloud init
 gcloud config set run/region europe-north1
 ```
 
-
 *to be continued*
+
+## View container logs on Compute Engine
+
+```
+./logs watch
+./logs report
+```

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -eu
+
+PROJECT_ID=$(gcloud config get-value project)
+INSTANCE_NAME="sitewatch-$1"
+ZONE=europe-north1-a
+INSTANCE_ID=$(gcloud compute instances describe $INSTANCE_NAME --zone $ZONE --format='value(id)')
+FILTER="resource.type=gce_instance AND resource.labels.instance_id=$INSTANCE_ID AND logName=projects/$PROJECT_ID/logs/cos_containers"
+
+echo "using filter: $FILTER"
+gcloud logging read "$FILTER" --project $PROJECT_ID --format json --limit 10 | jq -j ".[]|.jsonPayload.message" | tac
