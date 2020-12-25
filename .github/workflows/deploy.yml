@@ -1,4 +1,5 @@
-# This workflow will build a docker container, publish it to Google Container Registry, and deploy it to Compute Engine
+# Build docker container, publish to Google Container Registry, deploy to Compute Engine.
+#
 # Based on https://github.com/actions/starter-workflows/blob/main/ci/google.yml
 #
 # To configure this workflow, set up secrets in your workspace:
@@ -23,7 +24,7 @@ env:
   AIVEN_PG_SERVICE: ${{ secrets.AIVEN_PG_SERVICE }}
   AIVEN_KAFKA_SERVICE: ${{ secrets.AIVEN_KAFKA_SERVICE }}
   GCP_ZONE: europe-north1-a
-  MAGINE_TYPE: e2-micro
+  MACHINE_TYPE: e2-micro
   IMAGE: sitewatch
 
 jobs:
@@ -51,21 +52,28 @@ jobs:
     # Build the Docker image
     - name: Build
       run: |-
-        docker build \
-          --tag "gcr.io/$PROJECT_ID/$IMAGE" \
-          .
+        docker build --tag "gcr.io/$PROJECT_ID/$IMAGE" .
 
     # Push the Docker image to Google Container Registry
     - name: Publish
       run: |-
         docker push "gcr.io/$PROJECT_ID/$IMAGE"
 
-    - run: |-
+    - name: Delete watch instance, if exists
+      run: |-
         gcloud compute instances delete $IMAGE-watch --zone $GCP_ZONE || true
-        # TODO: consider `gcloud compute instances update-container`
+
+    - name: Delete report instance, if exists
+      run: |-
+        gcloud compute instances delete $IMAGE-report --zone $GCP_ZONE || true
+
+    # TODO: consider `gcloud compute instances update-container`
+
+    - name: Create watch instance
+      run: |-
         gcloud compute instances create-with-container $IMAGE-watch \
           --zone $GCP_ZONE \
-          --machine-type=$MAGINE_TYPE \
+          --machine-type=$MACHINE_TYPE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
           --container-env AIVEN_EMAIL=$AIVEN_EMAIL \
@@ -74,12 +82,11 @@ jobs:
           --container-env AIVEN_KAFKA_SERVICE=$AIVEN_KAFKA_SERVICE \
           --container-arg watch
 
-    - run: |-
-        gcloud compute instances delete $IMAGE-report --zone $GCP_ZONE || true
-        # TODO: consider `gcloud compute instances update-container`
+    - name: Create report instance
+      run: |-
         gcloud compute instances create-with-container $IMAGE-report \
           --zone $GCP_ZONE \
-          --machine-type=$MAGINE_TYPE \
+          --machine-type=$MACHINE_TYPE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
           --container-env AIVEN_EMAIL=$AIVEN_EMAIL \
