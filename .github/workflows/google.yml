@@ -60,7 +60,8 @@ jobs:
         docker push "gcr.io/$PROJECT_ID/$IMAGE"
 
     - run: |-
-        gcloud compute instances update-container $IMAGE-watch \
+        gcloud compute instances delete $IMAGE-watch --zone $GCP_ZONE || true
+        gcloud compute instances create-with-container $IMAGE-watch \
           --zone $GCP_ZONE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
@@ -71,7 +72,8 @@ jobs:
           --container-arg watch
 
     - run: |-
-        gcloud compute instances update-container $IMAGE-report \
+        gcloud compute instances delete $IMAGE-report --zone $GCP_ZONE || true
+        gcloud compute instances create-with-container $IMAGE-report \
           --zone $GCP_ZONE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
