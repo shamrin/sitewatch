@@ -2,5 +2,10 @@
 
 set -eu
 
+if [ $# -ne 1 ]; then
+    echo "usage: $0 watch|report"
+    exit 1
+fi
+
 docker build -t test .
-docker run -it test
+docker run -it --mount type=bind,source="$(pwd)"/.env,target=/app/.env test "$1"

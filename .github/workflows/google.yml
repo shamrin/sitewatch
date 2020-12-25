@@ -62,6 +62,7 @@ jobs:
 
     - run: |-
         gcloud compute instances delete $IMAGE-watch --zone $GCP_ZONE || true
+        # TODO: consider `gcloud compute instances update-container`
         gcloud compute instances create-with-container $IMAGE-watch \
           --zone $GCP_ZONE \
           --machine-type=$MAGINE_TYPE \
@@ -75,6 +76,7 @@ jobs:
 
     - run: |-
         gcloud compute instances delete $IMAGE-report --zone $GCP_ZONE || true
+        # TODO: consider `gcloud compute instances update-container`
         gcloud compute instances create-with-container $IMAGE-report \
           --zone $GCP_ZONE \
           --machine-type=$MAGINE_TYPE \
