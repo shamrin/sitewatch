@@ -122,7 +122,6 @@ async def init_report_table(conn):
 
 
 async def fetch_pages(conn) -> List[Page]:
-    await init_page_table(conn)
     pages = [
         Page(
             row['pageid'],

@@ -18,7 +18,7 @@ from .model import Report, Page
 
 
 def log_prefix(page: Page) -> str:
-    return f'pageid:{page.id} url:{page.url} period:{page.period} regex:{page.regex.pattern if page.regex else None}:'
+    return f'pageid:{page.id} {page.url} period:{page.period} regex:{page.regex.pattern if page.regex else None}:'
 
 
 async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
@@ -56,7 +56,7 @@ async def consume_and_save_reports():
         async with open_consumer(KAFKA_TOPIC) as consumer:
             print('consuming Kafka messages')
             async for msg in consumer:
-                print("consumed: ", msg)
+                print(f'consumed: offset:{msg.offset} {msg.value}')
                 report = Report.frombytes(msg.value)
                 await db.save_report(conn, report)
 
@@ -65,6 +65,7 @@ async def watch_pages():
     """"Watch page URLs and send reports to Kafka"""
     async with db.connect() as conn, open_producer() as producer:
         print('connected to Kafka and Postgres')
+        await db.init_page_table(conn)
 
         async with db.listen(conn, db.PAGE_CHANNEL) as notifications:
             print(f'pg: LISTEN {db.PAGE_CHANNEL}')
