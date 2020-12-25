@@ -1,7 +1,7 @@
 from typing import Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import timedelta, datetime
-import json
+import orjson
 import re
 
 
@@ -21,6 +21,12 @@ class ValidationError(Exception):
     pass
 
 
+def default(obj):
+    if isinstance(obj, timedelta):
+        return obj.total_seconds()
+    raise TypeError
+
+
 @dataclass
 class Report:
     """Web page check result"""
@@ -33,17 +39,14 @@ class Report:
 
     def tobytes(self) -> bytes:
         """Serialize"""
-        d = asdict(self)
-        d['elapsed'] = d['elapsed'].total_seconds()
-        d['sent'] = d['sent'].isoformat()
-        return json.dumps(d).encode('utf8')
+        return orjson.dumps(self, default=default)
 
     @classmethod
     def frombytes(cls, raw: bytes) -> 'Report':
         """Deserialize"""
         try:
-            d = json.loads(str(raw, 'utf8'))
-        except json.JSONDecodeError:
+            d = orjson.loads(raw)
+        except orjson.JSONDecodeError:
             raise ValidationError('invalid json')
         try:
             elapsed = timedelta(seconds=d['elapsed'])
