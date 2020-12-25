@@ -23,6 +23,7 @@ env:
   AIVEN_PG_SERVICE: ${{ secrets.AIVEN_PG_SERVICE }}
   AIVEN_KAFKA_SERVICE: ${{ secrets.AIVEN_KAFKA_SERVICE }}
   GCP_ZONE: europe-north1-a
+  MAGINE_TYPE: e2-micro
   IMAGE: sitewatch
 
 jobs:
@@ -63,6 +64,7 @@ jobs:
         gcloud compute instances delete $IMAGE-watch --zone $GCP_ZONE || true
         gcloud compute instances create-with-container $IMAGE-watch \
           --zone $GCP_ZONE \
+          --machine-type=$MAGINE_TYPE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
           --container-env AIVEN_EMAIL=$AIVEN_EMAIL \
@@ -75,6 +77,7 @@ jobs:
         gcloud compute instances delete $IMAGE-report --zone $GCP_ZONE || true
         gcloud compute instances create-with-container $IMAGE-report \
           --zone $GCP_ZONE \
+          --machine-type=$MAGINE_TYPE \
           --container-image gcr.io/$(gcloud config get-value project)/$IMAGE \
           --container-env AIVEN_TOKEN=$AIVEN_TOKEN \
           --container-env AIVEN_EMAIL=$AIVEN_EMAIL \
