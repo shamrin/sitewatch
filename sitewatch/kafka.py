@@ -7,20 +7,20 @@ from trio_asyncio import aio_as_trio
 import aiokafka
 from aiokafka.helpers import create_ssl_context
 
-KAFKA_TOPIC = 'report-topic'
+TOPIC = 'report-topic'
 
 
 def open_producer():
-    return KafkaProducer(loop=asyncio.get_event_loop(), **kafka_params())
+    return Producer(loop=asyncio.get_event_loop(), **connection_params())
 
 
 def open_consumer(topic):
-    return KafkaConsumer(
-        topic, group_id='my-group', loop=asyncio.get_event_loop(), **kafka_params()
+    return Consumer(
+        topic, group_id='my-group', loop=asyncio.get_event_loop(), **connection_params()
     )
 
 
-class KafkaProducer(aiokafka.AIOKafkaProducer):
+class Producer(aiokafka.AIOKafkaProducer):
     """Same as aiokafka class, but trio-compatible"""
 
     # Also provides a work-around until this fix is merged:
@@ -40,7 +40,7 @@ class KafkaProducer(aiokafka.AIOKafkaProducer):
         return await super().send_and_wait(*arg, **kw)
 
 
-class KafkaConsumer(aiokafka.AIOKafkaConsumer):
+class Consumer(aiokafka.AIOKafkaConsumer):
     """Same as aiokafka class, but trio-compatible"""
 
     @aio_as_trio
@@ -53,7 +53,7 @@ class KafkaConsumer(aiokafka.AIOKafkaConsumer):
         await self.stop()
 
 
-def kafka_params():
+def connection_params():
     """Return Kafka connection params"""
 
     service_uri = os.environ.get('KAFKA_SERVICE_URI')

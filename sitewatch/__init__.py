@@ -7,12 +7,7 @@ import trio
 import trio_asyncio
 import httpx
 
-from .kafka import (
-    KafkaProducer,
-    open_producer,
-    open_consumer,
-    KAFKA_TOPIC,
-)
+from . import kafka
 from . import db
 from .model import Report, Page
 
@@ -37,13 +32,13 @@ async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
     )
 
 
-async def check_and_produce(producer: KafkaProducer, page: Page):
+async def check_and_produce(producer: kafka.Producer, page: Page):
     """Periodically check page and send reports to Kafka producer, forever"""
     sleep = page.period.total_seconds()
     async with httpx.AsyncClient() as client:
         while True:
             report = await check_page(client, page)
-            record = await producer.send_and_wait(KAFKA_TOPIC, report.tobytes())
+            record = await producer.send_and_wait(kafka.TOPIC, report.tobytes())
             print(f'pageid:{page.id} message sent offset:{record.offset}')
             print(log_prefix(page), f'waiting {sleep}s...')
             await trio.sleep(sleep)
@@ -53,7 +48,7 @@ async def consume_and_save_reports():
     """Listen to Kafka and save reports to database"""
     async with db.connect() as conn:
         await db.init_report_table(conn)
-        async with open_consumer(KAFKA_TOPIC) as consumer:
+        async with kafka.open_consumer(kafka.TOPIC) as consumer:
             print('consuming Kafka messages')
             async for msg in consumer:
                 print(f'consumed: offset:{msg.offset} {msg.value}')
@@ -63,7 +58,7 @@ async def consume_and_save_reports():
 
 async def watch_pages():
     """"Watch page URLs and send reports to Kafka"""
-    async with db.connect() as conn, open_producer() as producer:
+    async with db.connect() as conn, kafka.open_producer() as producer:
         print('connected to Kafka and Postgres')
         await db.init_page_table(conn)
 
