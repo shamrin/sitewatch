@@ -1,8 +1,8 @@
+from datetime import datetime
+
 import pytest
 
-from datetime import datetime, timedelta
-
-from sitewatch.model import Report, ValidationError
+from sitewatch.model import Report, ValidationError, ParseError
 
 
 @pytest.mark.parametrize('found', [None, True, False])
@@ -10,7 +10,7 @@ def test_report_model(snapshot, found):
     r = Report(
         pageid=42,
         sent=datetime(2020, 1, 1, 1, 1, 1),
-        elapsed=timedelta(minutes=1),
+        elapsed=60.0,
         status_code=200,
         found=found,
     )
@@ -20,22 +20,31 @@ def test_report_model(snapshot, found):
 
 
 @pytest.mark.parametrize(
-    'invalid_field,broken',
+    'raw',
     [
-        (
-            'datetime',
-            b'{"pageid": 42, "sent": "broken-date", "elapsed": 60.0, "status_code": 200, "found": true}',
-        ),
-        (
-            'duration',
-            b'{"pageid": 42, "sent": "2020-01-01T01:01:01", "elapsed": "broken-duration", "status_code": 200, "found": true}',
-        ),
-        (
-            'json',
-            b'{"pageid": 42, "sent": "2020-01-01T01:01:01", "elapsed": 60.0, "status_code": 200, "found": true',
-        ),
+        b'',
+        b'{',
+        b'{"pageid": 42',
     ],
 )
-def test_report_model_broken(invalid_field, broken):
-    with pytest.raises(ValidationError, match=fr'invalid {invalid_field}'):
-        Report.frombytes(broken)
+def test_report_model_parsing(snapshot, raw):
+    try:
+        Report.frombytes(raw)
+    except ParseError as e:
+        index = e.messages()[0].start_position.char_index
+        snapshot.assert_match({'at char': index, 'message': str(e)})
+
+
+@pytest.mark.parametrize(
+    'raw',
+    [
+        b'{"pageid": 42, "sent": "broken-date", "elapsed": 60.0, "status_code": 200, "found": true}',
+        b'{"pageid": 42, "sent": "2020-01-01T01:01:01", "elapsed": "broken-duration", "status_code": 200, "found": true}',
+        b'{}',
+    ],
+)
+def test_report_model_validation(snapshot, raw):
+    try:
+        Report.frombytes(raw)
+    except ValidationError as e:
+        snapshot.assert_match(dict(e))

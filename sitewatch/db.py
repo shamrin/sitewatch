@@ -112,7 +112,7 @@ async def init_report_table(conn):
         CREATE TABLE IF NOT EXISTS report(
             reportid serial PRIMARY KEY,
             pageid integer NOT NULL REFERENCES page ON DELETE CASCADE,
-            elapsed interval NOT NULL,
+            elapsed real NOT NULL,
             statuscode int NOT NULL,
             sent timestamp NOT NULL,
             found boolean

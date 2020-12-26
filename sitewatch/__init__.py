@@ -9,7 +9,7 @@ import httpx
 
 from . import kafka
 from . import db
-from .model import Report, Page
+from .model import Report, Page, ValidationError, ParseError
 
 
 def log_prefix(page: Page) -> str:
@@ -26,7 +26,7 @@ async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
     return Report(
         pageid=page.id,
         sent=now,
-        elapsed=r.elapsed,
+        elapsed=r.elapsed.total_seconds(),
         status_code=r.status_code,
         found=found,
     )
@@ -75,9 +75,16 @@ async def watch_reports():
         async with kafka.open_consumer(kafka.TOPIC) as consumer:
             print('consuming Kafka messages')
             async for msg in consumer:
-                print(f'consumed: offset:{msg.offset} {msg.value}')
-                report = Report.frombytes(msg.value)
-                await db.save_report(conn, report)
+                print(f'consumed message with offset {msg.offset}: {msg.value}')
+                try:
+                    report = Report.frombytes(msg.value)
+                except ValidationError as e:
+                    print(f'validation error {dict(e)}: {msg.value}')
+                except ParseError as e:
+                    index = e.messages()[0].start_position.char_index
+                    print(f'parse error "{e}" at char {index}: {msg.value}')
+                else:
+                    await db.save_report(conn, report)
 
 
 async def run(mode):

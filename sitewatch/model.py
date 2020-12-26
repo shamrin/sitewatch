@@ -1,8 +1,11 @@
 from typing import Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import timedelta, datetime
 import json
 import re
+
+import typesystem
+from typesystem import ValidationError, ParseError
 
 
 @dataclass
@@ -15,49 +18,20 @@ class Page:
     regex: Optional[re.Pattern[str]]
 
 
-class ValidationError(Exception):
-    """Error deserializing Report"""
-
-    pass
-
-
-@dataclass
-class Report:
+class Report(typesystem.Schema):
     """Web page check result"""
 
-    pageid: int
-    sent: datetime
-    elapsed: timedelta
-    status_code: int
-    found: Optional[bool] = None
+    pageid: int = typesystem.Integer(minimum=0)
+    sent: datetime = typesystem.DateTime()
+    elapsed: float = typesystem.Float(minimum=0)
+    status_code: int = typesystem.Integer()
+    found: Optional[bool] = typesystem.Boolean(default=None, allow_null=True)
 
     def tobytes(self) -> bytes:
-        """Serialize"""
-        d = asdict(self)
-        d['elapsed'] = d['elapsed'].total_seconds()
-        d['sent'] = d['sent'].isoformat()
-        return json.dumps(d).encode('utf8')
+        """Serialize to JSON"""
+        return json.dumps(dict(self)).encode('utf8')
 
     @classmethod
     def frombytes(cls, raw: bytes) -> 'Report':
-        """Deserialize"""
-        try:
-            d = json.loads(str(raw, 'utf8'))
-        except json.JSONDecodeError:
-            raise ValidationError('invalid json')
-        try:
-            elapsed = timedelta(seconds=d['elapsed'])
-        except TypeError:
-            raise ValidationError('invalid duration')
-        try:
-            sent = datetime.fromisoformat(d['sent'])
-        except ValueError:
-            raise ValidationError('invalid datetime')
-
-        return cls(
-            pageid=d['pageid'],
-            sent=sent,
-            elapsed=elapsed,
-            status_code=d['status_code'],
-            found=d['found'],
-        )
+        """Deserialize from JSON"""
+        return typesystem.validate_json(raw, validator=Report)
