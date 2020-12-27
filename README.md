@@ -14,12 +14,6 @@
 - [Posgres](https://www.postgresql.org/): LISTEN/NOTIFY
 - [Retool](https://retool.com/): quickly build admin UI
 
-## Dependencies
-
-* Python 3.9
-* [Aiven](https://aiven.io)
-* Google Cloud: [Containers](https://cloud.google.com/compute/docs/containers)
-
 ## Start hacking
 
 Prerequisites:
