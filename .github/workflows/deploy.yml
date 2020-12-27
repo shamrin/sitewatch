@@ -4,7 +4,7 @@
 #
 # To configure this workflow, set up secrets in your workspace:
 # 1. GCP_PROJECT with the name of the project
-# 2. GKE_SA_KEY with the Base64 encoded JSON service account key (https://github.com/GoogleCloudPlatform/github-actions/tree/docs/service-account-key/setup-gcloud#inputs).
+# 2. GCP_SA_KEY with the Base64 encoded JSON service account key (https://github.com/GoogleCloudPlatform/github-actions/tree/docs/service-account-key/setup-gcloud#inputs).
 # 3. AIVEN_*
 
 name: sitewatch deploy
