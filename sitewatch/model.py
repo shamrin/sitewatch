@@ -1,6 +1,6 @@
 from typing import Optional
 from dataclasses import dataclass
-from datetime import timedelta, datetime
+from datetime import timedelta
 import json
 import re
 
@@ -21,11 +21,11 @@ class Page:
 class Report(typesystem.Schema):
     """Web page check result"""
 
-    pageid: int = typesystem.Integer(minimum=0)
-    sent: datetime = typesystem.DateTime()
-    elapsed: float = typesystem.Float(minimum=0)
-    status_code: int = typesystem.Integer()
-    found: Optional[bool] = typesystem.Boolean(default=None, allow_null=True)
+    pageid = typesystem.Integer(minimum=0)
+    sent = typesystem.DateTime()
+    elapsed = typesystem.Float(minimum=0)
+    status_code = typesystem.Integer()
+    found = typesystem.Boolean(default=None, allow_null=True)
 
     def tobytes(self) -> bytes:
         """Serialize to JSON"""

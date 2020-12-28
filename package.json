@@ -1,0 +1,10 @@
+{
+  "name": "sitewatch",
+  "scripts": {
+    "typecheck": "pyright",
+    "typecheck-watch": "pyright -w"
+  },
+  "dependencies": {
+    "pyright": "^1.1.97"
+  }
+}

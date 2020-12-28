@@ -26,11 +26,13 @@ Prerequisites:
 * [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
 * [jq](https://stedolan.github.io/jq/)
 * Aiven project with Kafka and Postgres running
+* npm
 
 Setup:
 ```
 poetry env use python3.9
 poetry install
+npm install
 ```
 
 Load Aiven credentials and service URIs to `.env/` (replace `pg-123456` and `kafka-123456` with correct service names in Aiven):

@@ -1,13 +1,16 @@
 """Datatabase connection, tables init and main operations"""
 
+# pyright: strict
+
 import os
 from datetime import timedelta
 import re
-from typing import List
+from typing import List, Any
 from contextlib import asynccontextmanager
 
 import trio
 import triopg
+from triopg import Connection
 
 from .model import Report, Page
 
@@ -25,7 +28,7 @@ def connect():
 
 
 @asynccontextmanager
-async def listen(conn, channel):
+async def listen(conn: Connection, channel: str):
     """LISTEN on `channel` notifications and return memory channel to iterate over
 
     For example:
@@ -37,9 +40,9 @@ async def listen(conn, channel):
 
     # based on https://gitter.im/python-trio/general?at=5fe10d762084ee4b78650fc8
 
-    send_channel, receive_channel = trio.open_memory_channel(1)
+    send_channel, receive_channel = trio.open_memory_channel[str](1)
 
-    def _listen_callback(c, pid, chan, payload):
+    def _listen_callback(c: Any, pid: Any, chan: str, payload: str):
         send_channel.send_nowait(payload)
 
     await conn.add_listener(channel, _listen_callback)
@@ -48,7 +51,7 @@ async def listen(conn, channel):
     await conn.remove_listener(channel, _listen_callback)
 
 
-async def init_page_table(conn):
+async def init_page_table(conn: Connection):
     """Initialize `page` table and add fixtures (idempotent)"""
 
     await conn.execute(
@@ -104,7 +107,7 @@ async def init_page_table(conn):
     )
 
 
-async def init_report_table(conn):
+async def init_report_table(conn: Connection):
     """Initialize `report` table (idempotent)"""
 
     await conn.execute(
@@ -121,7 +124,7 @@ async def init_report_table(conn):
     )
 
 
-async def fetch_pages(conn) -> List[Page]:
+async def fetch_pages(conn: Connection) -> List[Page]:
     pages = [
         Page(
             row['pageid'],
@@ -135,7 +138,7 @@ async def fetch_pages(conn) -> List[Page]:
     return pages
 
 
-async def save_report(conn, r: Report):
+async def save_report(conn: Connection, r: Report):
     await conn.execute(
         '''
         INSERT INTO report(pageid, elapsed, statuscode, sent, found)
