@@ -16,7 +16,7 @@ snapshots['test_watch_page 3'] = 120.0
 snapshots['test_watch_reports[-False-parse error] 1'] = '''parse error "No content." at char 0: b\'\'
 '''
 
-snapshots['test_watch_reports[{"pageid": 42, "sent": "2020-01-01T01:01:01", "elapsed": 60.0, "status_code": 200, "found": true}-True-consumed message] 1'] = '''consumed message with offset 123: b\'{"pageid": 42, "sent": "2020-01-01T01:01:01", "elapsed": 60.0, "status_code": 200, "found": true}\'
+snapshots['test_watch_reports[{"pageid": 42, "sent": "2020-01-01T01:01:01", "elapsed": 60.0, "status_code": 200, "found": true}-True-saved to db] 1'] = '''saved to db: Report(pageid=42, sent=datetime.datetime(2020, 1, 1, 1, 1, 1), elapsed=60.0, status_code=200, found=True)
 '''
 
 snapshots['test_watch_reports[{-False-parse error] 1'] = '''parse error "Expecting property name enclosed in double quotes." at char 1: b\'{\'

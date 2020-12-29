@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import re
 from unittest.mock import AsyncMock, MagicMock
 from contextlib import asynccontextmanager
+import logging
 
 import pytest
 import trio
@@ -102,12 +103,12 @@ async def test_watch_pages(nursery, monkeypatch, db_listen):
         (
             b'{"pageid": 42, "sent": "2020-01-01T01:01:01", "elapsed": 60.0, "status_code": 200, "found": true}',
             True,
-            r'consumed message',
+            r'saved to db',
         ),
     ],
 )
 async def test_watch_reports(
-    monkeypatch, capsys, snapshot, raw, expected_ok, expected_out
+    monkeypatch, caplog, snapshot, raw, expected_ok, expected_out
 ):
     @asynccontextmanager
     async def consumer():
@@ -124,7 +125,8 @@ async def test_watch_reports(
     monkeypatch.setattr(kafka, 'open_consumer', MagicMock(return_value=consumer()))
     monkeypatch.setattr(db, 'save_report', save_report := AsyncMock())
 
-    await watch_reports()
+    with caplog.at_level(logging.INFO):
+        await watch_reports()
 
     if expected_ok:
         save_report.assert_awaited_once()
@@ -132,8 +134,8 @@ async def test_watch_reports(
         save_report.assert_not_awaited()
 
     if expected_out:
-        pattern = re.compile(f'^{expected_out}[^$]*', re.MULTILINE)
-        out = capsys.readouterr().out
+        pattern = re.compile(f'{expected_out}[^$]*', re.MULTILINE)
+        out = caplog.text
         m = pattern.search(out)
         assert m is not None, f'pattern {pattern!r} not found in {out!r}'
         snapshot.assert_match(m[0])

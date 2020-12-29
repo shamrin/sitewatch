@@ -147,4 +147,3 @@ async def save_report(conn, r: Report):
         r.sent,
         r.found,
     )
-    print(f'saved to db: {r}')
