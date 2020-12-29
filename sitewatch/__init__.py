@@ -2,6 +2,7 @@
 
 import sys
 from datetime import datetime
+import logging
 
 import trio
 import trio_asyncio
@@ -10,8 +11,10 @@ import httpx
 from . import kafka
 from . import db
 from .model import Report, Page, ValidationError, ParseError
-from . import log
 from .context import pageid_var
+from .log import init_logging
+
+log = logging.getLogger(__name__)
 
 
 async def check_page(client: httpx.AsyncClient, page: Page) -> Report:
@@ -92,7 +95,7 @@ async def watch_reports():
 
 
 async def run(mode):
-    log.init()
+    init_logging()
     log.info(f'starting up {mode}')
     if mode == 'watch':
         await watch_pages()
